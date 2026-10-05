@@ -8,15 +8,32 @@ import {tripText} from '../../i18n/tripCopy';
 import {uiCopy} from '../../i18n/uiCopy';
 import {useSettingsStore} from '../../store/settingsStore';
 import {AppError, logDeveloperError, toAppError} from '../errors/AppError';
+import {
+  DownloadPaused,
+  clearDownloadPause,
+  downloadGeneration,
+  downloadStalled,
+  isDownloadPaused,
+  noteDownloadPulse,
+  pauseDownloads,
+  throwIfPaused,
+} from './downloadPause';
 import {downloadRegionHouses, forgetRegionHouses, housesAreComplete} from './houseDownload';
 import {fetchRegionRoads, saveRegionRoads, streetsAreComplete} from '../roads/RegionRoads';
 import {routingGraph} from '../roads/RegionGraph';
 
 const KEY = 'neiv.regions.v1';
 const runningDownloads = new Set<string>();
+const downloadTickets = new Map<string, number>();
+let nextTicket = 1;
 
 export function regionDownloadActive(regionId: string): boolean {
   return runningDownloads.has(regionId);
+}
+
+export function releaseRegionDownloads(): void {
+  runningDownloads.clear();
+  downloadTickets.clear();
 }
 
 export async function loadRegionState(): Promise<Record<string, RegionDownload>> {
@@ -37,9 +54,19 @@ export async function persistRegionState(): Promise<void> {
 
 export async function downloadRegion(region: RegionDefinition): Promise<void> {
   if (runningDownloads.has(region.id)) {
-    return;
+    if (!downloadStalled()) {
+      return;
+    }
+    pauseDownloads();
+    releaseRegionDownloads();
+    clearDownloadPause();
   }
+  const ticket = nextTicket;
+  nextTicket += 1;
   runningDownloads.add(region.id);
+  downloadTickets.set(region.id, ticket);
+  const stamp = downloadGeneration();
+  noteDownloadPulse();
   const existing = useMapStore.getState().regions[region.id];
   const hasPack = Boolean(existing?.packId);
   useMapStore.getState().patchRegion(region.id, {
@@ -78,6 +105,7 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
       useMapStore.getState().patchRegion(region.id, {packId, progress: 0.68});
       await persistRegionState();
     }
+    throwIfPaused(stamp);
     try {
       await fetchRegionRoads(region, (done, total) => {
         const copy = uiCopy(useSettingsStore.getState().language);
@@ -87,9 +115,13 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
           detail: `${copy.streetTiles} ${done}/${total}`,
         });
       });
-    } catch {
+    } catch (error) {
+      if (isDownloadPaused(error)) {
+        throw error;
+      }
       // Saved street tiles stay. The next download continues them.
     }
+    throwIfPaused(stamp);
     try {
       await downloadRegionHouses(region, fraction => {
         const copy = uiCopy(useSettingsStore.getState().language);
@@ -105,6 +137,7 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
       await persistRegionState();
       throw appError;
     }
+    throwIfPaused(stamp);
     const clipped = routingGraph().edges.some(edge =>
       edge.coordinates.some(
         ([lon, lat]) =>
@@ -120,6 +153,9 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
     });
     await persistRegionState();
   } catch (error) {
+    if (error instanceof DownloadPaused || isDownloadPaused(error)) {
+      return;
+    }
     const appError = toAppError(error, 'OFFLINE_MAP_ERROR');
     logDeveloperError(appError);
     const current = useMapStore.getState().regions[region.id];
@@ -128,7 +164,10 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
     }
     throw appError;
   } finally {
-    runningDownloads.delete(region.id);
+    if (downloadTickets.get(region.id) === ticket) {
+      runningDownloads.delete(region.id);
+      downloadTickets.delete(region.id);
+    }
   }
 }
 

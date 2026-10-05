@@ -1,5 +1,7 @@
+import {resolveLanguage} from '../../i18n/settingsCopy';
 import {uiCopy} from '../../i18n/uiCopy';
 import type {Place} from '../../models/domain';
+import {useMapStore} from '../../store/mapStore';
 import {useSessionStore} from '../../store/sessionStore';
 import {useSettingsStore} from '../../store/settingsStore';
 import {haversineMeters} from '../../utils/geo';
@@ -7,6 +9,7 @@ import {routingGraph} from '../roads/RegionGraph';
 import {AppError} from '../errors/AppError';
 import {searchDownloadedHouses} from './houses';
 import {placeFix} from '../navigation/placeFix';
+import {googleSearchReady, googleSuggest} from './googlePlaces';
 import {matchesStreet, normalizeAddress, parseAddress, queryVariants, sameHouse, streetKey, wantedHouse} from './addressQuery';
 
 type Bias = {latitude: number; longitude: number};
@@ -102,10 +105,24 @@ export function orderPlaces(places: Place[], bias: Bias | null, query = ''): Pla
     ? ranked.filter(place => place.kind === 'house' || place.kind === 'street')
     : ranked;
   const named = concrete.filter(place => queryNamesSettlement(query, settlementOf(place)));
-  const pool = named.length > 0 ? named : sameTown(concrete, bias, distance);
-  if (wantedHouse(query)) {
-    const houses = pool.filter(place => place.kind === 'house');
-    return (houses.length > 0 ? houses : pool).slice(0, 8);
+  const namedTown = named.length > 0;
+  const pool = namedTown ? named : sameTown(concrete, bias, distance);
+  const wanted = wantedHouse(query);
+  if (wanted) {
+    const near = (place: Place) => namedTown || !bias || distance(place) <= 40000;
+    const nearHouses = pool.filter(place => place.kind === 'house' && near(place));
+    if (nearHouses.length > 0) {
+      return nearHouses.map(place => showTypedHouse(place, wanted)).slice(0, 8);
+    }
+    const streets = pool.filter(place => place.kind === 'street' && near(place));
+    if (streets.length > 0) {
+      return streets.map(place => showTypedHouse(place, wanted)).slice(0, 8);
+    }
+    if (!bias) {
+      const anywhere = pool.filter(place => place.kind === 'street' || place.kind === 'house');
+      return anywhere.map(place => showTypedHouse(place, wanted)).slice(0, 8);
+    }
+    return [];
   }
   const streets = pool.filter(place => place.kind === 'street');
   return (streets.length > 0 ? streets : pool).slice(0, 8);
@@ -115,11 +132,29 @@ export function suggestPlacesNow(query: string): Place[] {
   return orderPlaces(searchPlaces(query), viewerBias(), query);
 }
 
+/** True when the phone is not known to be offline, so Google can answer. */
+export function googleSearchOn(): boolean {
+  const link = useMapStore.getState();
+  return googleSearchReady() && !(link.linkKnown && !link.online);
+}
+
 export async function suggestPlaces(query: string): Promise<Place[]> {
   const local = searchPlaces(query);
   const bias = viewerBias();
   if (query.trim().length < 2) {
     return orderPlaces(local, bias, query);
+  }
+  if (googleSearchOn()) {
+    try {
+      const language = resolveLanguage(useSettingsStore.getState().language);
+      const google = await googleSuggest(query, language, bias);
+      if (google.length > 0) {
+        return google;
+      }
+      return orderPlaces(local, bias, query);
+    } catch {
+      // Google can be blocked or slow. The older lookup below still answers.
+    }
   }
   try {
     const remote = await searchPlacesOnline(query);
@@ -159,69 +194,61 @@ function sameTown(
   if (!bias) {
     return ranked;
   }
-  const nearby = ranked.filter(place => distance(place) <= 50000);
-  if (nearby.length > 0) {
-    return nearby;
-  }
-  return ranked.slice(0, 8);
+  return ranked.filter(place => distance(place) <= 40000);
 }
 
 export async function searchPlacesOnline(query: string): Promise<Place[]> {
   const wanted = wantedHouse(query);
   const bias = viewerBias();
+  const streetName = parseAddress(query).street || query;
+  try {
+    const streets = await photonSearch(streetQuery(streetName), bias, 'street');
+    const ranked = orderPlaces(
+      streets.filter(place => place.kind === 'street' && matchesStreet(place.name, query)),
+      bias,
+      query,
+    );
+    if (ranked.length > 0) {
+      return ranked;
+    }
+  } catch {
+    // The street lookup can fail. One house lookup still runs.
+  }
   if (!wanted) {
-    try {
-      const streets = await photonSearch(streetQuery(query), bias, 'street');
-      const ranked = orderPlaces(
-        streets.filter(place => place.kind === 'street' && matchesStreet(place.name, query)),
-        bias,
-        query,
-      );
-      if (ranked.length > 0) {
-        return ranked;
-      }
-    } catch {
-      // A street-only lookup can fail. The general search still runs.
-    }
+    return [];
   }
-  const found: Place[] = [];
-  const seen = new Set<string>();
-  for (const variant of queryVariants(query)) {
-    let batch: Place[] = [];
-    try {
-      batch = await photonSearch(variant, bias);
-    } catch {
-      continue;
-    }
-    batch.forEach(place => {
-      if (seen.has(place.id) || !acceptsHouse(place, query, wanted)) {
-        return;
-      }
-      seen.add(place.id);
-      found.push(place);
-    });
-    const closeHouse = found.some(place => place.kind === 'house' && houseIsClose(place, bias));
-    if (closeHouse) {
-      break;
-    }
+  try {
+    const houses = await photonSearch(streetQuery(query), bias);
+    return orderPlaces(
+      houses.filter(place => acceptsHouse(place, query, wanted)),
+      bias,
+      query,
+    );
+  } catch {
+    return [];
   }
-  return orderPlaces(found, bias, query);
 }
 
 function insideUkraine(latitude: number, longitude: number): boolean {
   return latitude >= 44.2 && latitude <= 52.4 && longitude >= 22.1 && longitude <= 40.3;
 }
 
-function houseIsClose(place: Place, bias: Bias | null): boolean {
-  if (!bias) {
-    return true;
-  }
-  return haversineMeters(bias.latitude, bias.longitude, place.latitude, place.longitude) < 20000;
+function showTypedHouse(place: Place, wanted: string): Place {
+  const parts = place.name.split(', ').map(part => part.trim()).filter(part => part.length > 0);
+  const street = parts[0] ?? place.name;
+  const rest = parts.slice(1).filter(part => !sameHouse(part, wanted) && !/^\d/.test(normalizeAddress(part)));
+  return {
+    ...place,
+    kind: place.kind === 'street' ? 'house' : place.kind,
+    name: [street, wanted, ...rest].join(', '),
+  };
 }
 
 function viewerBias(): Bias | null {
-  const latitude = useSessionStore.getState().displayLatitude;
-  const longitude = useSessionStore.getState().displayLongitude;
+  const session = useSessionStore.getState();
+  const fix = session.snapshot;
+  const latitude = session.displayLatitude ?? (fix?.hasGps ? fix.latitude : null);
+  const longitude = session.displayLongitude ?? (fix?.hasGps ? fix.longitude : null);
   if (latitude == null || longitude == null) {
     return null;
   }

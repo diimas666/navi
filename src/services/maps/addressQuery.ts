@@ -8,7 +8,7 @@ const consonants = new Set('бвгґджзйклмнпрстфхцчшщbcdfghjk
 
 export function parseAddress(query: string): ParsedAddress {
   const trimmed = query.trim().replace(/\s+/g, ' ');
-  const match = /(?:^|\s)(\d+)\s*([a-zа-яіїєґ])?(?=\s|$)/i.exec(trimmed);
+  const match = /(?:^|\s)(\d+)\s*-?\s*([a-zа-яіїєґ])?(?=\s|$)/i.exec(trimmed);
   if (!match || match.index == null) {
     return {street: trimmed, number: null, letter: null};
   }
@@ -96,6 +96,11 @@ export function ukrainianQuery(value: string): string {
     [/инская/gi, 'інська'],
     [/овская/gi, 'івська'],
     [/евская/gi, 'євська'],
+    [/ейская/gi, 'ійська'],
+    [/ейский/gi, 'ійський'],
+    [/ейское/gi, 'ійське'],
+    [/еская/gi, 'ійська'],
+    [/еский/gi, 'ійський'],
     [/ездная/gi, 'їзна'],
     [/ездна/gi, 'їзна'],
     [/цкая/gi, 'цька'],
@@ -116,7 +121,9 @@ export function ukrainianQuery(value: string): string {
     .replace(/Ё/g, 'Є')
     .replace(/и/g, 'і')
     .replace(/И/g, 'І')
-    .replace(/ъ/g, '');
+    .replace(/ъ/g, '')
+    .replace(/уліца/gi, letters => (letters[0] === 'У' ? 'Вулиця' : 'вулиця'))
+    .replace(/улица/gi, letters => (letters[0] === 'У' ? 'Вулиця' : 'вулиця'));
 }
 
 export function sameHouse(got: string | undefined, wanted: string | null): boolean {

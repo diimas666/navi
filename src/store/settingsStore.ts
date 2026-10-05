@@ -21,6 +21,7 @@ export type SettingsState = {
   autoReturnSeconds: number;
   keepManualZoom: boolean;
   baseZoom: number;
+  placeIcons: boolean;
   speedCameras: boolean;
   autoLockParked: boolean;
   autoUnlockGps: boolean;
@@ -41,6 +42,7 @@ export type SettingsState = {
   setAutoReturnSeconds: (value: number) => void;
   setKeepManualZoom: (value: boolean) => void;
   setBaseZoom: (value: number) => void;
+  setPlaceIcons: (value: boolean) => void;
   setSpeedCameras: (value: boolean) => void;
   setAutoLockParked: (value: boolean) => void;
   setAutoUnlockGps: (value: boolean) => void;
@@ -67,6 +69,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   autoReturnSeconds: 5,
   keepManualZoom: false,
   baseZoom: 16,
+  placeIcons: true,
   speedCameras: false,
   autoLockParked: true,
   autoUnlockGps: true,
@@ -87,6 +90,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setAutoReturnSeconds: autoReturnSeconds => set({autoReturnSeconds}),
   setKeepManualZoom: keepManualZoom => set({keepManualZoom}),
   setBaseZoom: baseZoom => set({baseZoom}),
+  setPlaceIcons: placeIcons => set({placeIcons}),
   setSpeedCameras: speedCameras => set({speedCameras}),
   setAutoLockParked: autoLockParked => set({autoLockParked}),
   setAutoUnlockGps: autoUnlockGps => set({autoUnlockGps}),

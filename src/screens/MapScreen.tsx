@@ -76,8 +76,9 @@ export function MapScreen(_props: Props) {
   const lastHead = useRef<{at: number; heading: number} | null>(null);
   const trust = (snapshot?.trust ?? 'lost') as TrustLevel;
   const drActive = snapshot?.source === 'dr' || snapshot?.source === 'blended';
-  const centerLat = latitude ?? 50.4501;
-  const centerLon = longitude ?? 30.5234;
+  const located = latitude != null && longitude != null;
+  const centerLat = latitude ?? 0;
+  const centerLon = longitude ?? 0;
   const farFromRoads = snapshot?.hasEstimate === true && crossTrackM != null && crossTrackM > 80;
   const eta = farFromRoads ? offRoadEta(crossTrackM, snapshot?.speedMps ?? 0, snapshot?.hasSpeed === true) : null;
   const shownLat = centerLat;
@@ -86,7 +87,7 @@ export function MapScreen(_props: Props) {
   const liveSpeed = snapshot?.hasSpeed ? snapshot.speedMps : 0;
   const speedMps = liveSpeed;
   const lastFix = useRef<{lat: number; lon: number} | null>(null);
-  if (follow && !keepManualZoom && !touching.current) {
+  if (located && follow && !keepManualZoom && !touching.current) {
     zoomRef.current = zoomFor(baseZoom, liveSpeed, turnRate.current);
   }
 
@@ -138,15 +139,13 @@ export function MapScreen(_props: Props) {
     };
   }, []);
 
-  const zoomReady = useRef(false);
   useEffect(() => {
-    zoomRef.current = baseZoom;
-    if (!zoomReady.current) {
-      zoomReady.current = true;
+    if (!located) {
       return;
     }
+    zoomRef.current = baseZoom;
     setZoomToken(token => token + 1);
-  }, [baseZoom]);
+  }, [baseZoom, located]);
 
   useEffect(() => {
     const heading = shownHeading;
@@ -202,8 +201,9 @@ export function MapScreen(_props: Props) {
     setPicking(false);
     setDriving(false);
     movedAt.current = Date.now();
+    useSessionStore.getState().resetRoute();
     useSessionStore.getState().setFollow(false);
-    startTripTo(place, {latitude: shownLat, longitude: shownLon})
+    startTripTo(place)
       .then(result => {
         if (result === 'ok') {
           setFitToken(token => token + 1);
@@ -231,10 +231,10 @@ export function MapScreen(_props: Props) {
     NativeTripSession?.stopNavigation();
   };
 
-  const alongM = route ? progressAlong(route.coordinates, shownLat, shownLon) : 0;
+  const alongM = route && located ? progressAlong(route.coordinates, shownLat, shownLon) : 0;
   const remainingM = route ? Math.max(0, route.distanceM - alongM) : traveledM;
   const remainingS = route && route.distanceM > 0 ? route.durationS * (remainingM / route.distanceM) : 0;
-  const cue = driving && route ? nextCue(route, shownLat, shownLon, resolveLanguage(language)) : null;
+  const cue = driving && route && located ? nextCue(route, shownLat, shownLon, resolveLanguage(language)) : null;
   const spoken = cue ? `${cue.title}:${Math.round(cue.meters / 20)}` : '';
   useEffect(() => {
     if (!voice) {
@@ -250,12 +250,19 @@ export function MapScreen(_props: Props) {
 
   return (
     <View style={[styles.fill, {backgroundColor: colors.background}]}>
+      {located ? null : (
+        <View style={styles.locating} pointerEvents="none">
+          <Text style={[type.body, {color: colors.textSecondary}]}>{copy.locating}</Text>
+        </View>
+      )}
+      {located ? (
       <NaviMap
         latitude={shownLat}
         longitude={shownLon}
         heading={shownHeading}
         speedMps={speedMps}
-        follow={follow}
+        follow={follow && located}
+        located={located}
         tracking={driving}
         headingUp={headingUp}
         buildings3d={driving && buildings3d}
@@ -283,6 +290,15 @@ export function MapScreen(_props: Props) {
               }
             : undefined
         }
+        onPlaceGo={place => {
+          previewRoute({
+            id: place.id,
+            name: place.name,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            kind: place.kind,
+          });
+        }}
         onGesture={(holding, zoom) => {
           touching.current = holding;
           if (holding) {
@@ -296,6 +312,7 @@ export function MapScreen(_props: Props) {
           useSessionStore.getState().setFollow(false);
         }}
       />
+      ) : null}
       {farFromRoads ? (
         <View style={styles.banners}>
           <View style={styles.banner}>
@@ -363,9 +380,12 @@ export function MapScreen(_props: Props) {
             session.unlockPosition();
             return;
           }
+          if (session.displayLatitude == null || session.displayLongitude == null) {
+            return;
+          }
           session.lockPosition(
-            session.displayLatitude ?? shownLat,
-            session.displayLongitude ?? shownLon,
+            session.displayLatitude,
+            session.displayLongitude,
             session.snapshot?.heading ?? shownHeading,
             true,
           );
@@ -416,6 +436,7 @@ export function MapScreen(_props: Props) {
           mode="drive"
           meters={remainingM}
           seconds={remainingS}
+          place={destinationName ?? target?.name ?? ''}
           others={alternatives}
           onPick={picked => chooseRoute(picked, true)}
           onEnd={cancelTrip}
@@ -468,6 +489,7 @@ function zoomFor(base: number, speedMps: number, turnDegPerSec: number): number 
 
 const styles = StyleSheet.create({
   fill: {flex: 1},
+  locating: {position: 'absolute', top: '42%', left: 24, right: 24, alignItems: 'center'},
   linkBanner: {
     position: 'absolute',
     top: 54,

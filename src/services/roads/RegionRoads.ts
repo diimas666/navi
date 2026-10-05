@@ -5,6 +5,14 @@ import type {RoadNetwork} from '../../models/domain';
 import {jsonTooBig, readBoundedJson} from '../jsonLimit';
 import {boundsArea, splitBounds, tileId, type Bounds} from '../maps/houses';
 import {highwayFilter, parseOverpass, setRegionNetworks, waysToNetwork} from './RegionGraph';
+import {
+  DownloadPaused,
+  downloadGeneration,
+  isDownloadPaused,
+  noteDownloadPulse,
+  throwIfPaused,
+  trackAbort,
+} from '../maps/downloadPause';
 
 const KEY = 'neiv.region-roads.v1';
 const TILE_KEY = 'neiv.region-roads.v2';
@@ -71,16 +79,16 @@ async function downloadStreetTiles(
   const done = new Set(manifest[region.id]?.tiles ?? []);
   const bounds = {west: region.west, south: region.south, east: region.east, north: region.north};
   const seeds = tilesUnder(bounds, STREET_TILE_AREA);
-  let finished = 0;
+  const stamp = downloadGeneration();
   let failed = false;
-  onProgress?.(0, seeds.length);
+  onProgress?.(done.size, seeds.length);
   for (const seed of seeds) {
+    throwIfPaused(stamp);
     const saved = await walk(seed, 0);
     if (!saved) {
       failed = true;
     }
-    finished += 1;
-    onProgress?.(finished, seeds.length);
+    onProgress?.(done.size, seeds.length);
   }
   manifest[region.id] = {tiles: Array.from(done), complete: !failed};
   await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
@@ -99,6 +107,7 @@ async function downloadStreetTiles(
       return saved;
     }
     try {
+      throwIfPaused(stamp);
       const network = await fetchStreetTile(piece, region);
       if (network.edges.length > 2000 && depth < 6 && boundsArea(piece) >= 0.0004) {
         throw new Error('street tile too dense');
@@ -109,10 +118,14 @@ async function downloadStreetTiles(
       }
       await AsyncStorage.setItem(streetTileKey(region.id, id), raw);
       done.add(id);
+      onProgress?.(done.size, seeds.length);
       manifest[region.id] = {tiles: Array.from(done), complete: false};
       await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
       return true;
-    } catch {
+    } catch (error) {
+      if (isDownloadPaused(error)) {
+        throw error;
+      }
       if (depth >= 6 || boundsArea(piece) < 0.0004) {
         return false;
       }
@@ -148,16 +161,27 @@ async function fetchStreetTile(bounds: Bounds, region: RegionDefinition): Promis
   const query = `[out:json][timeout:40];way["highway"~"^(${highwayFilter(region)})$"](${box});out geom;`;
   let lastError: unknown = new Error('streets unavailable');
   for (const endpoint of ENDPOINTS) {
+    const stamp = downloadGeneration();
+    noteDownloadPulse();
     try {
       const controller = new AbortController();
+      const release = trackAbort(controller);
       const timer = setTimeout(() => controller.abort(), 22_000);
       try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Navi/1.0 (street graph)'},
-          body: `data=${encodeURIComponent(query)}`,
-          signal: controller.signal,
-        });
+        const response = await Promise.race([
+          fetch(endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Navi/1.0 (street graph)'},
+            body: `data=${encodeURIComponent(query)}`,
+            signal: controller.signal,
+          }),
+          new Promise<Response>((_, reject) => {
+            setTimeout(() => {
+              controller.abort();
+              reject(new Error('street tile timeout'));
+            }, 24_000);
+          }),
+        ]);
         if (!response.ok) {
           throw new Error(`streets ${response.status}`);
         }
@@ -171,8 +195,12 @@ async function fetchStreetTile(bounds: Bounds, region: RegionDefinition): Promis
         return waysToNetwork(parseOverpass(payload));
       } finally {
         clearTimeout(timer);
+        release();
       }
     } catch (error) {
+      if (stamp !== downloadGeneration()) {
+        throw new DownloadPaused();
+      }
       lastError = error;
     }
   }

@@ -1,11 +1,14 @@
 import {useEffect, useRef} from 'react';
+import {AppState} from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 
 import type {TripRecord, TrustLevel} from '../models/domain';
+import NativeLocationManager from '../native/NativeLocationManager';
 import NativeOBDManager from '../native/NativeOBDManager';
 import NativeTripSession from '../native/NativeTripSession';
 import {syncDrAllowance} from '../services/entitlements/EntitlementService';
-import {loadRegionState, completeMissingHouses} from '../services/maps/OfflineMapService';
+import {loadRegionState, completeMissingHouses, releaseRegionDownloads} from '../services/maps/OfflineMapService';
+import {clearDownloadPause, downloadStalled, pauseDownloads} from '../services/maps/downloadPause';
 import {loadRegionRoads} from '../services/roads/RegionRoads';
 import {loadAllHouses} from '../services/maps/houseDownload';
 import {routingGraph} from '../services/roads/RegionGraph';
@@ -13,6 +16,7 @@ import {keepDistinctRoutes} from '../services/navigation/routeChoice';
 import {decidePark, type ParkMemory} from '../services/navigation/parkHold';
 import {distanceToRoute} from '../services/navigation/offRoute';
 import {geometryStartsNear, placeFix} from '../services/navigation/placeFix';
+import {loadLastPlace, rememberPlace} from '../services/navigation/lastPlace';
 import {planTrip, rebuildIfOffRoute} from '../services/navigation/startTrip';
 import {loadPlaces} from '../services/places/PlacesRepository';
 import {matchToRoad} from '../services/roads/RoadMatcher';
@@ -45,6 +49,24 @@ export function useAppServices(): void {
   useEffect(() => {
     let alive = true;
     const boot = async () => {
+      const remembered = await loadLastPlace();
+      if (alive && remembered && useSessionStore.getState().displayLatitude == null) {
+        useSessionStore.getState().setDisplay(remembered.latitude, remembered.longitude, null, false, null);
+      }
+      NativeLocationManager?.requestWhenInUse().catch(() => undefined);
+      NativeTripSession?.startPreview();
+      const live = await NativeLocationManager?.getLatestFix();
+      if (
+        alive &&
+        live &&
+        Number.isFinite(live.latitude) &&
+        Number.isFinite(live.longitude) &&
+        !(Math.abs(live.latitude) < 0.2 && Math.abs(live.longitude) < 0.2)
+      ) {
+        const stood = placeFix(live.latitude, live.longitude);
+        useSessionStore.getState().setDisplay(stood.latitude, stood.longitude, null, false, null);
+        rememberPlace(stood.latitude, stood.longitude);
+      }
       const [settings, trips, regions, places] = await Promise.all([
         loadSettings(),
         loadTrips(),
@@ -60,9 +82,11 @@ export function useAppServices(): void {
       usePlacesStore.getState().hydrate(places);
       await loadRegionRoads().catch(() => undefined);
       await loadAllHouses().catch(() => undefined);
-      NativeTripSession?.startPreview();
       syncDrAllowance();
       hydrated.current = true;
+      pauseDownloads();
+      releaseRegionDownloads();
+      clearDownloadPause();
       completeMissingHouses().catch(() => undefined);
     };
     boot().catch(() => {
@@ -89,11 +113,57 @@ export function useAppServices(): void {
         upgradeStreetRoute().catch(() => undefined);
       }
     };
+    const appSub = AppState.addEventListener('change', next => {
+      if (next === 'background') {
+        pauseDownloads();
+        releaseRegionDownloads();
+        return;
+      }
+      if (next === 'active' && downloadStalled()) {
+        pauseDownloads();
+        releaseRegionDownloads();
+        clearDownloadPause();
+        setTimeout(() => {
+          completeMissingHouses().catch(() => undefined);
+        }, 600);
+      }
+    });
     const netSub = NetInfo.addEventListener(applyLink);
     NetInfo.fetch().then(applyLink).catch(() => undefined);
     const probe = setInterval(() => {
       NetInfo.refresh().then(applyLink).catch(() => undefined);
     }, 4000);
+    const gpsWait = setInterval(() => {
+      if (useSessionStore.getState().displayLatitude != null) {
+        return;
+      }
+      NativeLocationManager?.getLatestFix()
+        .then(live => {
+          if (
+            !live ||
+            !Number.isFinite(live.latitude) ||
+            !Number.isFinite(live.longitude) ||
+            (Math.abs(live.latitude) < 0.2 && Math.abs(live.longitude) < 0.2) ||
+            useSessionStore.getState().displayLatitude != null
+          ) {
+            return;
+          }
+          const stood = placeFix(live.latitude, live.longitude);
+          useSessionStore.getState().setDisplay(stood.latitude, stood.longitude, null, false, null);
+          rememberPlace(stood.latitude, stood.longitude);
+        })
+        .catch(() => undefined);
+    }, 2000);
+    const downloadWatch = setInterval(() => {
+      const busy = Object.values(useMapStore.getState().regions).some(region => region.status === 'downloading');
+      if (!busy || !downloadStalled()) {
+        return;
+      }
+      pauseDownloads();
+      releaseRegionDownloads();
+      clearDownloadPause();
+      completeMissingHouses().catch(() => undefined);
+    }, 20_000);
     const obd = NativeOBDManager;
     const deviceSub = obd?.onDevice(device => useObdStore.getState().upsertDevice(device));
     const stateSub = obd?.onState(event => useObdStore.getState().setState(event.state, event.message));
@@ -123,40 +193,66 @@ export function useAppServices(): void {
         }
       }
       useSessionStore.getState().setSnapshot({...snapshot, trust, latitude, longitude});
+      const rawFix =
+        Number.isFinite(snapshot.gpsLatitude) &&
+        Number.isFinite(snapshot.gpsLongitude) &&
+        !(Math.abs(snapshot.gpsLatitude) < 0.2 && Math.abs(snapshot.gpsLongitude) < 0.2);
+      if (rawFix && useSessionStore.getState().displayLatitude == null) {
+        const stoodRaw = placeFix(snapshot.gpsLatitude, snapshot.gpsLongitude);
+        useSessionStore.getState().setDisplay(stoodRaw.latitude, stoodRaw.longitude, null, false, null);
+        rememberPlace(stoodRaw.latitude, stoodRaw.longitude);
+      }
       if (stood.replaced) {
         useSessionStore.getState().setDisplay(latitude, longitude, null, false, null);
         recoverFarRoute(latitude, longitude);
       }
       const routeLine = useSessionStore.getState().route?.coordinates;
-      const fixLeavesRoute =
+      const farFromLine =
         routeLine != null && routeLine.length > 1 && distanceToRoute(routeLine, latitude, longitude) > 30_000;
+      const routeStartsAway =
+        routeLine != null &&
+        routeLine.length > 1 &&
+        !geometryStartsNear(routeLine, latitude, longitude, 50_000);
       const placed = useSessionStore.getState().displayLatitude != null;
       const carried =
         placed && (snapshot.source === 'dr' || snapshot.source === 'blended' || snapshot.source === 'held');
-      if (!stood.replaced && !fixLeavesRoute && snapshot.hasEstimate && (snapshot.hasGps || carried)) {
+      if (!stood.replaced && snapshot.hasEstimate && (snapshot.hasGps || carried)) {
         const held = holdOrFollow(snapshot, latitude, longitude);
         const session = useSessionStore.getState();
         const now = Date.now();
         const gapS = lastShownAt > 0 ? (now - lastShownAt) / 1000 : 0;
         lastShownAt = now;
+        const jump =
+          session.displayLatitude != null && session.displayLongitude != null
+            ? haversineMeters(session.displayLatitude, session.displayLongitude, held.latitude, held.longitude)
+            : 0;
         const shown = session.locked
           ? held
-          : settleMarker({
-              fromLatitude: session.displayLatitude,
-              fromLongitude: session.displayLongitude,
-              latitude: held.latitude,
-              longitude: held.longitude,
-              gapS,
-              speedMps: snapshot.speedMps,
-              trustFix:
-                useMapStore.getState().online && (snapshot.source === 'gps' || snapshot.source === 'blended'),
-            });
+          : jump > 5_000
+            ? {latitude: held.latitude, longitude: held.longitude}
+            : settleMarker({
+                fromLatitude: session.displayLatitude,
+                fromLongitude: session.displayLongitude,
+                latitude: held.latitude,
+                longitude: held.longitude,
+                gapS,
+                speedMps: snapshot.speedMps,
+                trustFix:
+                  useMapStore.getState().online && (snapshot.source === 'gps' || snapshot.source === 'blended'),
+              });
         session.setDisplay(shown.latitude, shown.longitude, roadName, applied, crossTrackM);
+        if (snapshot.hasGps) {
+          rememberPlace(shown.latitude, shown.longitude);
+        }
         rememberPoint(snapshot, shown.latitude, shown.longitude);
         rememberCalibration(snapshot);
-        rebuildIfOffRoute(shown.latitude, shown.longitude, snapshot.speedMps, snapshot.navigationActive).catch(
-          () => undefined,
-        );
+        if (snapshot.hasGps && (farFromLine || routeStartsAway)) {
+          recoverFarRoute(shown.latitude, shown.longitude);
+        } else {
+          rebuildIfOffRoute(shown.latitude, shown.longitude, snapshot.speedMps, snapshot.navigationActive).catch(
+            () => undefined,
+          );
+        }
       }
       if (!snapshot.navigationActive && track.length > 1) {
         flushTrip();
@@ -166,8 +262,11 @@ export function useAppServices(): void {
     return () => {
       alive = false;
       settingsSub();
+      appSub.remove();
       netSub();
       clearInterval(probe);
+      clearInterval(gpsWait);
+      clearInterval(downloadWatch);
       deviceSub?.remove();
       stateSub?.remove();
       dataSub?.remove();

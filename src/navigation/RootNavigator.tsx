@@ -1,6 +1,7 @@
 import {createBottomTabNavigator, type BottomTabBarProps} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {tripText} from '../i18n/tripCopy';
 import {uiCopy} from '../i18n/uiCopy';
@@ -93,7 +94,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    bottom: 28,
+    zIndex: 30,
   },
   card: {
     borderRadius: 16,
@@ -128,6 +129,7 @@ const styles = StyleSheet.create({
 
 export function ToastBanner({message}: {message: string | null}) {
   const {colors} = useTheme();
+  const insets = useSafeAreaInsets();
   const language = resolveLanguage(useSettingsStore(state => state.language));
   if (!message) {
     return null;
@@ -140,7 +142,7 @@ export function ToastBanner({message}: {message: string | null}) {
     openAdapterSetup();
   };
   return (
-    <View style={styles.toast} pointerEvents="box-none">
+    <View style={[styles.toast, {top: insets.top + 8}]} pointerEvents="box-none">
       <View style={[styles.card, {backgroundColor: colors.surface}]}>
         <View style={styles.copy}>
           <Text style={[styles.title, {color: colors.textPrimary}]}>{message}</Text>

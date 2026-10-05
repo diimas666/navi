@@ -25,6 +25,7 @@ type DriveProps = {
   mode: 'drive';
   meters: number;
   seconds: number;
+  place: string;
   others: RoutePlan[];
   onPick: (route: RoutePlan) => void;
   onEnd: () => void;
@@ -127,7 +128,14 @@ export function TripPanel(props: Props) {
         accessibilityRole="button"
         onPress={() => setMenu(true)}
         style={[styles.eta, {bottom: barBottom + 84, backgroundColor: colors.glass}]}>
-        <Text style={[styles.etaTime, {color: colors.textPrimary}]}>{`~${travel}`}</Text>
+        <View style={styles.etaCopy}>
+          <Text style={[styles.etaTime, {color: colors.textPrimary}]}>{`~${travel}`}</Text>
+          {props.place ? (
+            <Text numberOfLines={1} style={[styles.etaPlace, {color: colors.textSecondary}]}>
+              {props.place}
+            </Text>
+          ) : null}
+        </View>
         <Text style={[styles.etaKm, {color: colors.textSecondary}]}>{km}</Text>
       </Pressable>
       <Modal transparent visible={menu} animationType="slide" onRequestClose={() => setMenu(false)}>
@@ -222,7 +230,9 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: {width: 0, height: 8},
   },
+  etaCopy: {flex: 1, marginRight: 12},
   etaTime: {fontSize: 20, fontWeight: '800'},
+  etaPlace: {fontSize: 13, fontWeight: '600', marginTop: 1},
   etaKm: {fontSize: 16, fontWeight: '700'},
   menuFill: {flex: 1, justifyContent: 'flex-end'},
   scrim: {...StyleSheet.absoluteFill},

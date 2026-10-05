@@ -82,6 +82,9 @@ import Foundation
       }
       self.manager.startUpdatingLocation()
       self.manager.startUpdatingHeading()
+      if let location = self.manager.location {
+        self.publish(location)
+      }
     }
   }
 
@@ -148,6 +151,10 @@ import Foundation
 
   public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
     guard let location = locations.last else { return }
+    publish(location)
+  }
+
+  private func publish(_ location: CLLocation) {
     let heading = manager.heading
     let trueHeading = heading?.trueHeading ?? -1
     let hasHeading = trueHeading >= 0

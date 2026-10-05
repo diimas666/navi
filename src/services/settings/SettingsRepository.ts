@@ -19,6 +19,7 @@ export type PersistedSettings = Pick<
   | 'autoReturnSeconds'
   | 'keepManualZoom'
   | 'baseZoom'
+  | 'placeIcons'
   | 'speedCameras'
   | 'autoLockParked'
   | 'autoUnlockGps'
@@ -73,6 +74,7 @@ export function selectPersisted(state: SettingsState): PersistedSettings {
     autoReturnSeconds: state.autoReturnSeconds,
     keepManualZoom: state.keepManualZoom,
     baseZoom: state.baseZoom,
+    placeIcons: state.placeIcons,
     speedCameras: state.speedCameras,
     autoLockParked: state.autoLockParked,
     autoUnlockGps: state.autoUnlockGps,

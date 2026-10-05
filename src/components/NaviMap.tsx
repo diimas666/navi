@@ -10,9 +10,23 @@ import {
 } from '@maplibre/maplibre-react-native';
 import type {StyleSpecification} from '@maplibre/maplibre-gl-style-spec';
 
+import {GOOGLE_MAPS_KEY} from '../constants/googleMapsKey';
 import {DARK_STYLE_URL, VECTOR_STYLE_URL} from '../constants/map';
+import {GoogleRoadMap, googleWebViewReady} from './GoogleRoadMap';
 import {loadBasemapStyle} from '../services/maps/basemapStyle';
-import {districtFeatures} from '../services/maps/districts';
+import {cityDistrictFeatures, districtFeatures} from '../services/maps/districts';
+import {
+  fetchNearbyPlaces,
+  fetchPlaceHours,
+  nearbyColors,
+  nearbyMarks,
+  nearbyRadius,
+  type NearbyPlace,
+  type PlaceHours,
+} from '../services/maps/nearbyPlaces';
+import {formatDistance} from '../utils/format';
+import {haversineMeters} from '../utils/geo';
+import {resolveLanguage} from '../i18n/settingsCopy';
 import {housesNear} from '../services/maps/houses';
 import {useMapStore} from '../store/mapStore';
 import {accuracyFeature} from './AccuracyCircle';
@@ -72,13 +86,15 @@ type Props = {
   onUserMove?: (zoom: number) => void;
   onGesture?: (holding: boolean, zoom: number) => void;
   onMapPress?: (longitude: number, latitude: number) => void;
-  destination?: {longitude: number; latitude: number} | null;
+  onPlaceGo?: (place: NearbyPlace) => void;
+  destination?: {longitude: number; latitude: number; name?: string} | null;
   destinationPin?: boolean;
   tracking?: boolean;
   headingUp?: boolean;
   fitToken?: number;
   buildings3d?: boolean;
   speedMps?: number;
+  located?: boolean;
 };
 
 export function NaviMap({
@@ -97,6 +113,7 @@ export function NaviMap({
   onUserMove,
   onGesture,
   onMapPress,
+  onPlaceGo,
   destination,
   destinationPin,
   tracking,
@@ -104,9 +121,12 @@ export function NaviMap({
   fitToken = 0,
   buildings3d = false,
   speedMps = 0,
+  located = true,
 }: Props) {
   const {colors, mode} = useTheme();
-  const copy = uiCopy(useSettingsStore(state => state.language));
+  const language = useSettingsStore(state => state.language);
+  const placeIcons = useSettingsStore(state => state.placeIcons);
+  const copy = uiCopy(language);
   const cameraRef = useRef<CameraRef>(null);
   const lastCameraMove = useRef(0);
   const lastPitch = useRef(0);
@@ -129,6 +149,13 @@ export function NaviMap({
   const online = useMapStore(state => state.online);
   const linkKnown = useMapStore(state => state.linkKnown);
   const offlineMap = linkKnown && !online;
+  const [googleDown, setGoogleDown] = useState(false);
+  const [googleLive, setGoogleLive] = useState(false);
+  const [look, setLook] = useState({latitude, longitude, zoom: zoomRef.current});
+  const [nearby, setNearby] = useState<NearbyPlace[]>([]);
+  const [picked, setPicked] = useState<NearbyPlace | null>(null);
+  const [hours, setHours] = useState<PlaceHours | null>(null);
+  const useGoogle = !offlineMap && !googleDown && GOOGLE_MAPS_KEY.length > 20 && googleWebViewReady();
   const styleKind = `${mode}:${offlineMap ? 'off' : 'on'}:${basemap ? 'styled' : 'url'}`;
   const seenStyle = useRef(styleKind);
   const styleGeneration = useRef(0);
@@ -140,17 +167,63 @@ export function NaviMap({
     }
   }
   const styleGenerationNow = styleGeneration.current;
-  const downloadedKey = useMapStore(state =>
-    Object.values(state.regions)
-      .filter(region => region.status === 'downloaded')
-      .map(region => region.id)
-      .sort()
-      .join(','),
-  );
-  const districts = useMemo(
-    () => districtFeatures(downloadedKey ? downloadedKey.split(',') : []),
-    [downloadedKey],
-  );
+  useEffect(() => {
+    if (!follow) {
+      return;
+    }
+    setLook({latitude, longitude, zoom: zoomRef.current});
+  }, [follow, latitude, longitude, zoomToken]);
+
+  useEffect(() => {
+    if (!placeIcons || nearbyRadius(look.zoom) === 0 || offlineMap || GOOGLE_MAPS_KEY.length < 20) {
+      setNearby([]);
+      setPicked(null);
+      return;
+    }
+    let gone = false;
+    const timer = setTimeout(() => {
+      fetchNearbyPlaces(look.latitude, look.longitude, look.zoom, resolveLanguage(language))
+        .then(places => {
+          if (!gone) {
+            setNearby(places);
+          }
+        })
+        .catch(() => {
+          if (!gone) {
+            setNearby([]);
+          }
+        });
+    }, 280);
+    return () => {
+      gone = true;
+      clearTimeout(timer);
+    };
+  }, [look.latitude, look.longitude, look.zoom, language, offlineMap, placeIcons]);
+
+  useEffect(() => {
+    if (!picked) {
+      setHours(null);
+      return;
+    }
+    let gone = false;
+    fetchPlaceHours(picked.id, resolveLanguage(language))
+      .then(value => {
+        if (!gone) {
+          setHours(value);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, [language, picked]);
+
+  const choosePlace = (place: NearbyPlace) => {
+    setPicked(place);
+  };
+
+  const districts = useMemo(() => districtFeatures(), []);
+  const cityDistricts = useMemo(() => cityDistrictFeatures(), []);
   const streetKey = `${view.latitude.toFixed(3)}:${view.longitude.toFixed(3)}`;
   const localStreets = useMemo(() => {
     const [latText, lonText] = streetKey.split(':');
@@ -206,6 +279,17 @@ export function NaviMap({
     }),
     [otherRoutes],
   );
+  const routeNames = useMemo(() => {
+    const features = (route?.steps ?? [])
+      .filter(step => step.coordinates && step.coordinates.length > 1 && step.name.trim().length > 2)
+      .filter(step => !/^(вулицями|по улицам)$/i.test(step.name.trim()))
+      .map(step => ({
+        type: 'Feature' as const,
+        properties: {name: step.name},
+        geometry: {type: 'LineString' as const, coordinates: step.coordinates ?? []},
+      }));
+    return {type: 'FeatureCollection' as const, features};
+  }, [route]);
   const routeShape = useMemo(
     () =>
       route
@@ -349,6 +433,12 @@ export function NaviMap({
         touchPitch={false}
         onPress={event => {
           const [pressLongitude, pressLatitude] = event.nativeEvent.lngLat;
+          const hit = nearestPlace(nearby, pressLatitude, pressLongitude, look.zoom);
+          if (hit) {
+            choosePlace(hit);
+            return;
+          }
+          setPicked(null);
           onMapPress?.(pressLongitude, pressLatitude);
         }}
         onRegionWillChange={event => {
@@ -381,6 +471,9 @@ export function NaviMap({
               }
               return {latitude: lat, longitude: lon, zoom: native.zoom};
             });
+            if (!follow) {
+              setLook({latitude: lat, longitude: lon, zoom: native.zoom});
+            }
           }
           if (!native.userInteraction) {
             return;
@@ -449,12 +542,34 @@ export function NaviMap({
             />
           </GeoJSONSource>
         ) : null}
+        <GeoJSONSource id="city-districts" data={cityDistricts}>
+          <Layer
+            id="city-district-labels"
+            type="symbol"
+            minzoom={9.2}
+            maxzoom={15.2}
+            layout={{
+              'text-field': ['get', 'name'],
+              'text-font': ['Noto Sans Regular'],
+              'text-size': 14,
+              'text-letter-spacing': 0.08,
+              'text-max-width': 7,
+              'text-padding': 6,
+              'text-allow-overlap': false,
+            }}
+            paint={{
+              'text-color': mode === 'dark' ? '#B9B3CC' : '#7E8794',
+              'text-halo-color': mode === 'dark' ? '#1C1430' : '#F7F4EE',
+              'text-halo-width': 1.6,
+            }}
+          />
+        </GeoJSONSource>
         {districts ? (
           <GeoJSONSource id="districts" data={districts}>
             <Layer
               id="district-labels"
               type="symbol"
-              minzoom={10.2}
+              minzoom={12}
               maxzoom={16.4}
               layout={{
                 'text-field': ['get', 'name'],
@@ -506,6 +621,28 @@ export function NaviMap({
             />
           </GeoJSONSource>
         ) : null}
+        {routeNames.features.length > 0 ? (
+          <GeoJSONSource id="route-names" data={routeNames}>
+            <Layer
+              id="route-street-names"
+              type="symbol"
+              layout={{
+                'symbol-placement': 'line',
+                'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Regular'],
+                'text-size': 14,
+                'text-max-angle': 28,
+                'text-padding': 4,
+                'text-keep-upright': true,
+              }}
+              paint={{
+                'text-color': '#1C1430',
+                'text-halo-color': '#FFFFFF',
+                'text-halo-width': 2.4,
+              }}
+            />
+          </GeoJSONSource>
+        ) : null}
         {gpsAccuracy != null ? (
           <GeoJSONSource id="gps-accuracy" data={accuracyFeature(latitude, longitude, gpsAccuracy)}>
             <Layer
@@ -546,29 +683,216 @@ export function NaviMap({
             />
           </Marker>
         ))}
+        {!googleLive && placeIcons
+          ? nearby.map(place => (
+              <Marker
+                key={place.id}
+                id={`poi-${place.id}`}
+                lngLat={[place.longitude, place.latitude]}
+                anchor={picked?.id === place.id ? 'bottom' : 'center'}
+                onPress={() => choosePlace(place)}>
+                <View style={styles.poiWrap} pointerEvents="box-none">
+                  {picked?.id === place.id ? (
+                    <PlaceCard
+                      place={place}
+                      here={{latitude, longitude}}
+                      hours={hours}
+                      copy={copy}
+                      onGo={() => onPlaceGo?.(place)}
+                      onClose={() => setPicked(null)}
+                    />
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => choosePlace(place)}
+                    style={[
+                      styles.poi,
+                      {backgroundColor: nearbyColors[place.kind]},
+                      picked?.id === place.id ? styles.poiOn : null,
+                    ]}>
+                    <Text style={styles.poiMark}>{nearbyMarks[place.kind]}</Text>
+                  </Pressable>
+                </View>
+              </Marker>
+            ))
+          : null}
         {destination ? (
           <Marker
             key={`${destination.longitude}-${destination.latitude}`}
             id="destination"
             lngLat={[destination.longitude, destination.latitude]}
             anchor={route && !tracking ? 'bottom-left' : destinationPin ? 'bottom' : 'center'}>
-            {route && !tracking ? <CheckeredFlag /> : destinationPin ? <DropPin /> : <View style={styles.destPin} />}
+            <View style={styles.destWrap}>
+              {destination.name ? (
+                <View style={styles.destName}>
+                  <Text numberOfLines={2} style={styles.destNameText}>
+                    {destination.name}
+                  </Text>
+                </View>
+              ) : null}
+              {route && !tracking ? <CheckeredFlag /> : destinationPin ? <DropPin /> : <View style={styles.destPin} />}
+            </View>
           </Marker>
         ) : null}
-        {pinned ? null : (
+        {pinned || !located ? null : (
           <Marker id="vehicle" lngLat={[longitude, latitude]} anchor="center">
             <VehicleMarker navigating={tracking} rotation={tracking && headingUp ? 0 : heading} />
           </Marker>
         )}
       </Map>
-      {pinned ? (
-        <View pointerEvents="none" style={[styles.chevron, {top: driveFocal(frame) - 32}]}>
-          <VehicleMarker navigating rotation={0} />
+      {useGoogle ? (
+        <View
+          pointerEvents={googleLive ? 'auto' : 'none'}
+          style={[styles.google, {opacity: googleLive ? 1 : 0}]}>
+          <GoogleRoadMap
+            latitude={latitude}
+            longitude={longitude}
+            zoom={zoomRef.current}
+            heading={course}
+            follow={follow}
+            tracking={Boolean(tracking)}
+            frame={frame}
+            route={route}
+            alternatives={otherRoutes}
+            destination={destination ?? null}
+            routeColor={colors.route}
+            language={language}
+            fitToken={fitToken}
+            showUser={!pinned && located}
+            placeIcons={placeIcons}
+            nearby={nearby}
+            onUserMove={onUserMove}
+            onGesture={onGesture}
+            onLook={(lookLatitude, lookLongitude, lookZoom) => {
+              if (follow) {
+                return;
+              }
+              setLook({latitude: lookLatitude, longitude: lookLongitude, zoom: lookZoom});
+            }}
+            onMapPress={(pressLongitude, pressLatitude) => {
+              setPicked(null);
+              onMapPress?.(pressLongitude, pressLatitude);
+            }}
+            onPlace={place => choosePlace(place)}
+            onAlternative={onAlternative}
+            onReady={() => setGoogleLive(true)}
+            onFail={() => {
+              setGoogleLive(false);
+              setGoogleDown(true);
+            }}
+          />
         </View>
       ) : null}
-      <Text style={[type.caption, styles.attribution]}>
-        © OpenStreetMap contributors
-      </Text>
+      {pinned && located ? (
+        <View pointerEvents="none" style={[styles.chevron, {top: driveFocal(frame) - 32}]}>
+          <VehicleMarker navigating rotation={googleLive ? heading : 0} />
+        </View>
+      ) : null}
+      {googleLive && picked ? (
+        <View pointerEvents="box-none" style={styles.poiFloat}>
+          <PlaceCard
+            place={picked}
+            here={{latitude, longitude}}
+            hours={hours}
+            copy={copy}
+            onGo={() => onPlaceGo?.(picked)}
+            onClose={() => setPicked(null)}
+          />
+        </View>
+      ) : null}
+      {googleLive ? null : (
+        <Text style={[type.caption, styles.attribution]}>
+          © OpenStreetMap contributors
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function nearestPlace(places: NearbyPlace[], latitude: number, longitude: number, zoom: number): NearbyPlace | null {
+  const limit = zoom >= 16 ? 70 : zoom >= 14 ? 120 : 180;
+  let best: NearbyPlace | null = null;
+  let away = limit;
+  places.forEach(place => {
+    const meters = haversineMeters(latitude, longitude, place.latitude, place.longitude);
+    if (meters < away) {
+      away = meters;
+      best = place;
+    }
+  });
+  return best;
+}
+
+function poiKindLabel(kind: NearbyPlace['kind'], copy: ReturnType<typeof uiCopy>): string {
+  if (kind === 'pharmacy') {
+    return copy.poiPharmacy;
+  }
+  if (kind === 'food') {
+    return copy.poiFood;
+  }
+  if (kind === 'cafe') {
+    return copy.poiCafe;
+  }
+  if (kind === 'train') {
+    return copy.poiTrain;
+  }
+  if (kind === 'bus') {
+    return copy.poiBus;
+  }
+  return copy.poiGov;
+}
+
+function PlaceCard({
+  place,
+  here,
+  hours,
+  copy,
+  onGo,
+  onClose,
+}: {
+  place: NearbyPlace;
+  here: {latitude: number; longitude: number};
+  hours: PlaceHours | null;
+  copy: ReturnType<typeof uiCopy>;
+  onGo: () => void;
+  onClose: () => void;
+}) {
+  const away = formatDistance(haversineMeters(here.latitude, here.longitude, place.latitude, place.longitude));
+  const open = hours?.openNow ?? place.openNow;
+  const today = hours?.today;
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardCopy}>
+        <Text numberOfLines={2} style={styles.cardName}>
+          {place.name}
+        </Text>
+        <Text numberOfLines={1} style={styles.cardMeta}>
+          {poiKindLabel(place.kind, copy)} · {away}
+        </Text>
+        {open != null ? (
+          <Text numberOfLines={1} style={[styles.cardHours, open === false ? styles.cardShut : null]}>
+            {open ? copy.poiOpen : copy.poiClosed}
+          </Text>
+        ) : null}
+        {today ? (
+          <Text numberOfLines={2} style={styles.cardTime}>
+            {today}
+          </Text>
+        ) : null}
+      </View>
+      <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8} style={styles.cardX}>
+        <Text style={styles.cardXMark}>×</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          onClose();
+          onGo();
+        }}
+        style={styles.cardGo}>
+        <View style={styles.goHead} />
+        <View style={styles.goShaft} />
+      </Pressable>
     </View>
   );
 }
@@ -647,6 +971,7 @@ function CheckeredFlag() {
 
 const styles = StyleSheet.create({
   fill: {flex: 1},
+  google: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0},
   chevron: {
     position: 'absolute',
     left: 0,
@@ -660,6 +985,15 @@ const styles = StyleSheet.create({
     bottom: 8,
     color: '#8E84A3',
   },
+  destWrap: {alignItems: 'center', gap: 4},
+  destName: {
+    maxWidth: 180,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  destNameText: {color: '#1C1430', fontSize: 13, lineHeight: 16, fontWeight: '700', textAlign: 'center'},
   destPin: {
     width: 16,
     height: 16,
@@ -668,6 +1002,70 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#FFFFFF',
   },
+  poi: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  poiOn: {width: 26, height: 26, borderRadius: 13},
+  poiMark: {color: '#FFFFFF', fontSize: 11, lineHeight: 13, fontWeight: '800'},
+  poiWrap: {alignItems: 'center', gap: 6},
+  poiFloat: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 88,
+    alignItems: 'center',
+    zIndex: 8,
+  },
+  card: {
+    width: 340,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 16,
+    paddingRight: 10,
+    paddingVertical: 12,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#1C1430',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: {width: 0, height: 4},
+    elevation: 6,
+  },
+  cardCopy: {flex: 1, gap: 3},
+  cardName: {color: '#1C1430', fontSize: 17, lineHeight: 21, fontWeight: '800'},
+  cardMeta: {color: '#6E7680', fontSize: 14, lineHeight: 18, fontWeight: '600'},
+  cardHours: {color: '#1B8A4A', fontSize: 14, lineHeight: 18, fontWeight: '700'},
+  cardTime: {color: '#3A3348', fontSize: 14, lineHeight: 18, fontWeight: '600'},
+  cardShut: {color: '#C0392B'},
+  cardX: {width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
+  cardXMark: {color: '#1C1430', fontSize: 24, lineHeight: 26, fontWeight: '500'},
+  cardGo: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#6B4EE0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goHead: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#FFFFFF',
+  },
+  goShaft: {width: 3, height: 7, borderRadius: 1, backgroundColor: '#FFFFFF', marginTop: -1},
   badge: {
     minWidth: 64,
     borderRadius: 10,

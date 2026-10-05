@@ -24,16 +24,18 @@
 		A1C0DE11B2A34F5088E61C01 /* SpeechDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */; };
 		A9312B4028DFBC159C7C7605 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		B44923616827E1614FC43071 /* TripSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E585704B8B57C9EB17D23C1 /* TripSession.swift */; };
+		B6FFA4FF3073858900F98C24 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = BC8F5770C4D906EE6C61D2AB /* MapLibre */; };
 		BAC58C4F01C09A438D984B7A /* RCTNativeLocationManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */; };
 		C2DF59EA2103E44D05DEE430 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785D977DD8E774D2D654E037 /* LocationManager.swift */; };
 		C3E2F033D4C56172AA083E23 /* RCTSpeechDictation.mm in Sources */ = {isa = PBXBuildFile; fileRef = D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */; };
 		DE68B0C8FAB6D375FEC31502 /* OBDManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFD6EA31DC2E46773A1EDC4 /* OBDManager.swift */; };
+		E1A1000100A75B9A00A75B9A /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = E1A1000200A75B9A00A75B9A /* InfoPlist.strings */; };
 		F546E46CB6D68B3C7CCBB819 /* RCTNativeOBDManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = 8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		01A11EE59A810993C6A38189 /* ELM327Parser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ELM327Parser.swift; sourceTree = "<group>"; };
-		121350BAB78ACFEE555BA9BB /* RCTNativeTripSession.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeTripSession.mm; sourceTree = "<group>"; };
+		121350BAB78ACFEE555BA9BB /* RCTNativeTripSession.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeTripSession.mm; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Neiv.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neiv.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Neiv/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Neiv/Info.plist; sourceTree = "<group>"; };
@@ -44,26 +46,29 @@
 		5ACDB25B4CE528D9A105EF5C /* RCTNativeOBDManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeOBDManager.h; sourceTree = "<group>"; };
 		5B4051499F2CBAB7D9FBB278 /* DeadReckoningEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeadReckoningEngine.swift; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-Neiv.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Neiv.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		68045456645794257549457A /* RCTNativeMotionManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeMotionManager.mm; sourceTree = "<group>"; };
-		71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeMapStore.mm; sourceTree = "<group>"; };
+		68045456645794257549457A /* RCTNativeMotionManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeMotionManager.mm; sourceTree = "<group>"; };
+		71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeMapStore.mm; sourceTree = "<group>"; };
 		721385DF4EF8B2D2E12D6255 /* RCTNativeLocationManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeLocationManager.h; sourceTree = "<group>"; };
 		75A721A04E4C24E145F9E43E /* RCTNativeMapStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeMapStore.h; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Neiv/AppDelegate.swift; sourceTree = "<group>"; };
 		785D977DD8E774D2D654E037 /* LocationManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Neiv/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		858850C95C2D606B73CD878D /* RCTNativeDeadReckoningEngine.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeDeadReckoningEngine.mm; sourceTree = "<group>"; };
+		858850C95C2D606B73CD878D /* RCTNativeDeadReckoningEngine.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeDeadReckoningEngine.mm; sourceTree = "<group>"; };
 		8A3A306BEF96A2A6BE174B0A /* MapStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MapStore.swift; sourceTree = "<group>"; };
-		8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeOBDManager.mm; sourceTree = "<group>"; };
+		8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeOBDManager.mm; sourceTree = "<group>"; };
 		8BFD6EA31DC2E46773A1EDC4 /* OBDManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OBDManager.swift; sourceTree = "<group>"; };
 		9232187F89D3F88D373F5DE4 /* RCTNativeMotionManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeMotionManager.h; sourceTree = "<group>"; };
 		9A43BD56BD23FFCB0903A62A /* LocationTrustEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationTrustEngine.swift; sourceTree = "<group>"; };
 		A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NeivJSON.swift; sourceTree = "<group>"; };
 		AC79C4CBEB84AFD65423787C /* RCTNativeTripSession.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeTripSession.h; sourceTree = "<group>"; };
 		B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpeechDictation.swift; sourceTree = "<group>"; };
-		B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeLocationManager.mm; sourceTree = "<group>"; };
+		B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeLocationManager.mm; sourceTree = "<group>"; };
 		C4A8B33BAC0A034AD73F0D11 /* MotionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MotionManager.swift; sourceTree = "<group>"; };
-		D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTSpeechDictation.mm; sourceTree = "<group>"; };
+		D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTSpeechDictation.mm; sourceTree = "<group>"; };
 		DA18F8FB57F7F83BC61D57CC /* RCTNativeDeadReckoningEngine.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeDeadReckoningEngine.h; sourceTree = "<group>"; };
+		E1A1000300A75B9A00A75B9A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Neiv/en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		E1A1000400A75B9A00A75B9A /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = Neiv/ru.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		E1A1000500A75B9A00A75B9A /* uk */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = uk; path = Neiv/uk.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -72,6 +77,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B6FFA4FF3073858900F98C24 /* MapLibre in Frameworks */,
 				0C80B921A6F3F58F76C31292 /* libPods-Neiv.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -84,7 +90,6 @@
 			children = (
 				A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */,
 			);
-			name = Support;
 			path = Support;
 			sourceTree = "<group>";
 		};
@@ -94,6 +99,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
+				E1A1000200A75B9A00A75B9A /* InfoPlist.strings */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 			);
@@ -108,7 +114,6 @@
 				5ACDB25B4CE528D9A105EF5C /* RCTNativeOBDManager.h */,
 				8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */,
 			);
-			name = OBDManager;
 			path = OBDManager;
 			sourceTree = "<group>";
 		};
@@ -128,7 +133,6 @@
 				9232187F89D3F88D373F5DE4 /* RCTNativeMotionManager.h */,
 				68045456645794257549457A /* RCTNativeMotionManager.mm */,
 			);
-			name = MotionManager;
 			path = MotionManager;
 			sourceTree = "<group>";
 		};
@@ -142,7 +146,6 @@
 				121350BAB78ACFEE555BA9BB /* RCTNativeTripSession.mm */,
 				3E585704B8B57C9EB17D23C1 /* TripSession.swift */,
 			);
-			name = DeadReckoningEngine;
 			path = DeadReckoningEngine;
 			sourceTree = "<group>";
 		};
@@ -157,7 +160,6 @@
 				E5A4155F6E78394CC2205A45 /* Speech */,
 				054817AE285EE9A545416159 /* Support */,
 			);
-			name = NativeModules;
 			path = NativeModules;
 			sourceTree = "<group>";
 		};
@@ -198,7 +200,6 @@
 				75A721A04E4C24E145F9E43E /* RCTNativeMapStore.h */,
 				71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */,
 			);
-			name = MapStore;
 			path = MapStore;
 			sourceTree = "<group>";
 		};
@@ -219,7 +220,6 @@
 				721385DF4EF8B2D2E12D6255 /* RCTNativeLocationManager.h */,
 				B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */,
 			);
-			name = LocationManager;
 			path = LocationManager;
 			sourceTree = "<group>";
 		};
@@ -229,7 +229,6 @@
 				B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */,
 				D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */,
 			);
-			name = Speech;
 			path = Speech;
 			sourceTree = "<group>";
 		};
@@ -280,6 +279,8 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				uk,
+				ru,
 				Base,
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
@@ -303,6 +304,7 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				A9312B4028DFBC159C7C7605 /* PrivacyInfo.xcprivacy in Resources */,
+				E1A1000100A75B9A00A75B9A /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,6 +432,19 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXVariantGroup section */
+		E1A1000200A75B9A00A75B9A /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				E1A1000300A75B9A00A75B9A /* en */,
+				E1A1000400A75B9A00A75B9A /* ru */,
+				E1A1000500A75B9A00A75B9A /* uk */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -438,6 +453,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8467HTC6V4;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Neiv/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -469,6 +485,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8467HTC6V4;
 				INFOPLIST_FILE = Neiv/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (

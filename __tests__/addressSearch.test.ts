@@ -38,6 +38,60 @@ test('a missing vowel still matches the street name', () => {
   expect(matchesStreet('Рішельєвська вулиця', 'Ришельвська 45')).toBe(true);
 });
 
+test('a house letter is written without a hyphen and stays in the nearby city', () => {
+  expect(queryVariants('Армійська 4а')).toContain('Армійська 4а');
+  expect(queryVariants('Армійська 4-а')).toContain('Армійська 4а');
+  const volodarka: Place = {
+    id: 'volodarka',
+    name: 'Армійська вулиця, 4-А',
+    detail: 'Володарка',
+    latitude: 49.5242,
+    longitude: 29.9283,
+    kind: 'house',
+  };
+  const army: Place = {
+    id: 'odesa-army',
+    name: 'Армійська вулиця',
+    detail: 'Одеса',
+    latitude: 46.4981,
+    longitude: 30.6612,
+    kind: 'street',
+  };
+  const found = orderPlaces([volodarka, army], {latitude: 46.482, longitude: 30.723}, 'Армійська 4а');
+  expect(found.map(place => place.id)).toEqual(['odesa-army']);
+  expect(found[0]?.name).toBe('Армійська вулиця, 4а');
+  expect(found[0]?.detail).toBe('Одеса');
+});
+
+test('a nearby house stored with a hyphen is shown as 4а', () => {
+  const local: Place = {
+    id: 'local',
+    name: 'Армійська вулиця, 4-А',
+    detail: 'Одеса',
+    latitude: 46.5,
+    longitude: 30.66,
+    kind: 'house',
+  };
+  const far: Place = {
+    id: 'far',
+    name: 'Армійська вулиця, 4-А',
+    detail: 'Володарка',
+    latitude: 49.52,
+    longitude: 29.93,
+    kind: 'house',
+  };
+  const found = orderPlaces([far, local], {latitude: 46.482, longitude: 30.723}, 'Армейская 4а');
+  expect(found.map(place => place.id)).toEqual(['local']);
+  expect(found[0]?.name).toBe('Армійська вулиця, 4а');
+});
+
+test('russian army street is the ukrainian Армійська', () => {
+  expect(queryVariants('Армейская улица')).toContain('Армійська вулиця');
+  expect(queryVariants('Армеская')).toContain('Армійська');
+  expect(matchesStreet('Армійська вулиця', 'Армейская улица')).toBe(true);
+  expect(matchesStreet('Армійська вулиця', 'Армеская')).toBe(true);
+});
+
 test('russian and ukrainian spellings name the same ukrainian street', () => {
   expect(queryVariants('Дерибасовская 5')).toContain('Дерібасівська 5');
   expect(queryVariants('Проїзна 23')[0]).toBe('Проїзна 23');
@@ -90,7 +144,7 @@ test('a street query lists streets by distance and skips places', () => {
   expect(found.map(place => place.id)).toEqual(['near']);
 });
 
-test('address search shows the nearest house when nothing is close', () => {
+test('address search does not offer a house in another city', () => {
   const simferopol: Place = {
     id: 'simferopol',
     name: 'Проездная улица, 23',
@@ -100,7 +154,7 @@ test('address search shows the nearest house when nothing is close', () => {
     kind: 'house',
   };
   const found = orderPlaces([simferopol], {latitude: 46.482, longitude: 30.732}, 'Проездная 23');
-  expect(found.map(place => place.id)).toEqual(['simferopol']);
+  expect(found).toEqual([]);
 });
 
 test('address search uses the city written in the query', () => {

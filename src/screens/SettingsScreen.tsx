@@ -120,6 +120,16 @@ export function SettingsScreen({navigation}: Props) {
           </View>
           <RangeBar min={12} max={18} step={1} value={settings.baseZoom} onChange={settings.setBaseZoom} />
           <Text style={styles.note}>{t.zoomNote}</Text>
+          <View style={styles.split}>
+            <Text style={styles.ink}>{t.placeIcons}</Text>
+            <Switch
+              value={settings.placeIcons}
+              onValueChange={settings.setPlaceIcons}
+              trackColor={{false: '#E4E5EA', true: '#20B2AA'}}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+          <Text style={styles.note}>{t.placeIconsNote}</Text>
         </Card>
 
         <SectionLabel title={t.mapsSection} />

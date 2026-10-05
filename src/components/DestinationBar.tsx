@@ -17,7 +17,8 @@ import {uiCopy} from '../i18n/uiCopy';
 import type {Place} from '../models/domain';
 import NativeTripSession from '../native/NativeTripSession';
 import {useSettingsStore} from '../store/settingsStore';
-import {suggestPlaces, suggestPlacesNow} from '../services/maps/Geocoder';
+import {googleSearchOn, suggestPlaces, suggestPlacesNow} from '../services/maps/Geocoder';
+import {googleResolve, hasCoordinates} from '../services/maps/googlePlaces';
 import {dictate, stopDictation} from '../services/navigation/dictate';
 import {stopManeuverSpeech} from '../services/navigation/speakCue';
 import {useSessionStore} from '../store/sessionStore';
@@ -61,6 +62,7 @@ export function DestinationBar({
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const asked = useRef('');
   const listenToken = useRef(0);
+  const chooseToken = useRef(0);
 
   const insets = useSafeAreaInsets();
   const {height} = useWindowDimensions();
@@ -101,14 +103,24 @@ export function DestinationBar({
   const lookup = (value: string) => {
     asked.current = value;
     setQuery(value);
-    setResults(value.trim().length >= 2 ? suggestPlacesNow(value) : []);
+    const typed = value.trim().length >= 2;
+    if (!typed) {
+      setResults([]);
+    } else if (!googleSearchOn()) {
+      // Offline: downloaded streets answer on the spot.
+      setResults(suggestPlacesNow(value));
+    }
+    // Online: keep the previous rows until Google answers, so the list does not flash.
     setEmpty(false);
     if (pending.current) {
       clearTimeout(pending.current);
     }
+    if (!typed) {
+      return;
+    }
     pending.current = setTimeout(() => {
       runLookup(value).catch(() => undefined);
-    }, 180);
+    }, googleSearchOn() ? 60 : 180);
   };
 
   const runLookup = async (value: string) => {
@@ -159,12 +171,29 @@ export function DestinationBar({
 
   const choose = (place: Place) => {
     Keyboard.dismiss();
+    // The street name appears in the bar at once. The route follows when the point arrives.
     setQuery(place.name);
     setResults([]);
     setEmpty(false);
     setOpen(false);
     onSearchClose();
-    onTarget(place);
+    chooseToken.current += 1;
+    if (!place.placeId || hasCoordinates(place)) {
+      onTarget(place);
+      return;
+    }
+    const token = chooseToken.current;
+    googleResolve(place.placeId, resolveLanguage(useSettingsStore.getState().language))
+      .then(point => {
+        if (chooseToken.current === token) {
+          onTarget({...place, ...point});
+        }
+      })
+      .catch(() => {
+        if (chooseToken.current === token) {
+          useUiStore.getState().showToast(uiCopy(useSettingsStore.getState().language).searchFailed);
+        }
+      });
   };
 
   const openSearch = () => {
@@ -353,9 +382,12 @@ function SearchSheet({
           ) : null}
           <ScrollView keyboardShouldPersistTaps="always" style={styles.results} contentContainerStyle={styles.resultsContent}>
             {results.map(place => {
-              const away = here
-                ? haversineMeters(here.latitude, here.longitude, place.latitude, place.longitude)
-                : null;
+              const away =
+                place.distanceM != null
+                  ? place.distanceM
+                  : here && hasCoordinates(place)
+                    ? haversineMeters(here.latitude, here.longitude, place.latitude, place.longitude)
+                    : null;
               return (
                 <Pressable key={place.id} accessibilityRole="button" onPressIn={() => onChoose(place)} style={styles.hit}>
                   <View style={styles.hitCopy}>

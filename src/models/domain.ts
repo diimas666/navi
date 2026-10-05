@@ -35,6 +35,7 @@ export type RouteStep = {
   alongM?: number;
   latitude?: number;
   longitude?: number;
+  coordinates?: Array<[number, number]>;
   kind?: string;
   modifier?: string;
 };
@@ -69,4 +70,8 @@ export type Place = {
   longitude: number;
   kind: string;
   detail?: string;
+  /** Google place id. Coordinates are NaN until the driver taps the row. */
+  placeId?: string;
+  /** Distance from the driver, when the search service already knows it. */
+  distanceM?: number;
 };

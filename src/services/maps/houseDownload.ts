@@ -3,6 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {RegionDefinition} from '../../constants/map';
 import {jsonTooBig, readBoundedJson} from '../jsonLimit';
 import {
+  DownloadPaused,
+  downloadGeneration,
+  isDownloadPaused,
+  noteDownloadPulse,
+  throwIfPaused,
+  trackAbort,
+} from './downloadPause';
+import {
   addHouses,
   boundsArea,
   HOUSE_MEMORY_CAP,
@@ -75,6 +83,7 @@ export async function downloadRegionHouses(
 ): Promise<number> {
   const manifest = await readManifest();
   const done = new Set(manifest[region.id]?.tiles ?? []);
+  const stamp = downloadGeneration();
   const bounds = {west: region.west, south: region.south, east: region.east, north: region.north};
   const total = Math.max(boundsArea(bounds), 0.000001);
   let covered = 0;
@@ -84,6 +93,7 @@ export async function downloadRegionHouses(
   };
   await walk(bounds, 0);
   async function walk(piece: Bounds, depth: number): Promise<void> {
+    throwIfPaused(stamp);
     const id = tileId(piece);
     if (done.has(id)) {
       mark(piece);
@@ -107,6 +117,9 @@ export async function downloadRegionHouses(
       await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
       mark(piece);
     } catch (error) {
+      if (isDownloadPaused(error)) {
+        throw error;
+      }
       const tiny = boundsArea(piece) < 0.0004;
       if (depth >= MAX_SPLIT || tiny) {
         throw error;
@@ -133,6 +146,9 @@ async function fetchBounds(bounds: Bounds): Promise<HousePoint[]> {
       }
       return parseAddressPayload(payload);
     } catch (error) {
+      if (isDownloadPaused(error)) {
+        throw error;
+      }
       lastError = error;
     }
   }
@@ -140,7 +156,10 @@ async function fetchBounds(bounds: Bounds): Promise<HousePoint[]> {
 }
 
 async function postOverpass(endpoint: string, query: string): Promise<unknown> {
+  const stamp = downloadGeneration();
+  noteDownloadPulse();
   const controller = new AbortController();
+  const release = trackAbort(controller);
   const timer = setTimeout(() => controller.abort(), 22_000);
   try {
     const response = await fetch(endpoint, {
@@ -156,8 +175,14 @@ async function postOverpass(endpoint: string, query: string): Promise<unknown> {
       throw new Error(`address request ${response.status}`);
     }
     return await readBoundedJson(response, undefined, () => controller.abort());
+  } catch (error) {
+    if (stamp !== downloadGeneration()) {
+      throw new DownloadPaused();
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
+    release();
   }
 }
 

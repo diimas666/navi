@@ -5,7 +5,7 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>uk</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Navi</string>
 	<key>CFBundleExecutable</key>
@@ -24,6 +24,16 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.navigation</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>uk</string>
+		<string>ru</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -34,19 +44,19 @@
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Navi підключається до OBD-II адаптера по Bluetooth, щоб читати швидкість автомобіля.</string>
+	<string>Navi connects to an OBD-II adapter over Bluetooth to read the car's speed.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Navi підключається до OBD-II адаптера по Bluetooth, щоб читати швидкість автомобіля.</string>
+	<string>Navi connects to an OBD-II adapter over Bluetooth to read the car's speed.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Щоб оцінка маршруту не переривалась на заблокованому екрані, Navi продовжує отримувати геопозицію під час активної поїздки.</string>
+	<string>During an active trip, Navi keeps your location while the screen is locked so guidance does not stop.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Navi показує автомобіль на карті і бере звідси точку, від якої продовжує оцінку, якщо GPS зникне.</string>
+	<string>Navi shows the car on the map and uses this point to keep estimating position if GPS drops.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Мікрофон потрібен, щоб назвати адресу голосом.</string>
+	<string>The microphone is used so you can speak an address.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>Гіроскоп і компас допомагають оцінити напрямок руху, коли GPS недоступний.</string>
+	<string>The gyroscope and compass help estimate direction when GPS is unavailable.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Розпізнавання мови перетворює названу адресу на текст пошуку.</string>
+	<string>Speech recognition turns a spoken address into search text.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>
