@@ -20,6 +20,7 @@ import {geometryStartsNear, placeFix} from '../services/navigation/placeFix';
 import {loadLastPlace, rememberPlace} from '../services/navigation/lastPlace';
 import {planTrip, rebuildIfOffRoute} from '../services/navigation/startTrip';
 import {loadPlaces} from '../services/places/PlacesRepository';
+import {loadSearchHistory} from '../services/search/SearchHistoryRepository';
 import {matchToRoad} from '../services/roads/RoadMatcher';
 import {settleMarker} from '../services/navigation/markerSettle';
 import {streetRoutes} from '../services/roads/StreetRouter';
@@ -28,6 +29,7 @@ import {loadTrips, saveTrips} from '../services/trips/TripRepository';
 import {enrichTrip, preferPlace} from '../services/trips/tripPlace';
 import {useMapStore} from '../store/mapStore';
 import {usePlacesStore} from '../store/placesStore';
+import {useSearchHistoryStore} from '../store/searchHistoryStore';
 import {useObdStore} from '../store/obdStore';
 import {useSessionStore} from '../store/sessionStore';
 import {useSettingsStore} from '../store/settingsStore';
@@ -69,11 +71,12 @@ export function useAppServices(): void {
         useSessionStore.getState().setDisplay(stood.latitude, stood.longitude, null, false, null);
         rememberPlace(stood.latitude, stood.longitude);
       }
-      const [settings, trips, regions, places] = await Promise.all([
+      const [settings, trips, regions, places, history] = await Promise.all([
         loadSettings(),
         loadTrips(),
         loadRegionState(),
         loadPlaces(),
+        loadSearchHistory(),
       ]);
       if (!alive) {
         return;
@@ -82,6 +85,7 @@ export function useAppServices(): void {
       useTripStore.getState().setTrips(trips);
       useMapStore.getState().hydrateRegions(regions);
       usePlacesStore.getState().hydrate(places);
+      useSearchHistoryStore.getState().hydrate(history);
       await loadRegionRoads().catch(() => undefined);
       await loadAllHouses().catch(() => undefined);
       syncDrAllowance();

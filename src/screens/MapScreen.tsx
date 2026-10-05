@@ -25,6 +25,7 @@ import {openAdapterSetup} from '../navigation/navigationRef';
 import type {MainTabParamList} from '../navigation/types';
 import {useLinkStore} from '../store/linkStore';
 import {useMapStore} from '../store/mapStore';
+import {useSearchHistoryStore} from '../store/searchHistoryStore';
 import {useObdStore} from '../store/obdStore';
 import {useSessionStore} from '../store/sessionStore';
 import {useSettingsStore} from '../store/settingsStore';
@@ -72,6 +73,7 @@ export function MapScreen(_props: Props) {
   const [headingUp, setHeadingUp] = useState(true);
   const [buildings3d, setBuildings3d] = useState(false);
   const [fitToken, setFitToken] = useState(0);
+  const [hudWake, setHudWake] = useState(0);
   const incomingToken = useLinkStore(state => state.token);
   const movedAt = useRef(0);
   const touching = useRef(false);
@@ -210,6 +212,7 @@ export function MapScreen(_props: Props) {
     setPicking(false);
     setDriving(false);
     movedAt.current = Date.now();
+    useSearchHistoryStore.getState().remember(place);
     useSessionStore.getState().resetRoute();
     useSessionStore.getState().setFollow(false);
     startTripTo(place)
@@ -326,7 +329,13 @@ export function MapScreen(_props: Props) {
   }, []);
 
   return (
-    <View style={[styles.fill, {backgroundColor: colors.background}]}>
+    <View
+      style={[styles.fill, {backgroundColor: colors.background}]}
+      onTouchStart={() => {
+        if (driving) {
+          setHudWake(value => value + 1);
+        }
+      }}>
       {located ? null : (
         <View style={styles.locating} pointerEvents="none">
           <Text style={[type.body, {color: colors.textSecondary}]}>{copy.locating}</Text>
@@ -380,6 +389,10 @@ export function MapScreen(_props: Props) {
           touching.current = holding;
           if (holding) {
             zoomRef.current = zoom;
+            useSessionStore.getState().setFollow(false);
+            if (driving) {
+              setHudWake(value => value + 1);
+            }
           }
         }}
         onUserMove={zoom => {
@@ -515,6 +528,7 @@ export function MapScreen(_props: Props) {
           seconds={remainingS}
           place={destinationName ?? target?.name ?? ''}
           others={alternatives}
+          wake={hudWake}
           onPick={picked => chooseRoute(picked, true)}
           onEnd={cancelTrip}
         />

@@ -89,6 +89,14 @@ export function TripsScreen({navigation}: Props) {
 
   return (
     <SafeAreaView style={styles.screen}>
+      {menu ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy.cancel}
+          onPress={() => setMenu(false)}
+          style={styles.scrim}
+        />
+      ) : null}
       <View style={styles.top}>
         <View style={styles.topSide} />
         <Text style={styles.header}>{copy.tabTrips}</Text>
@@ -101,19 +109,25 @@ export function TripsScreen({navigation}: Props) {
         </Pressable>
       </View>
       {menu ? (
-        <View style={styles.menu}>
-          {SPANS.map(item => (
-            <Pressable
-              key={item}
-              accessibilityRole="button"
-              onPress={() => {
-                setSpan(item);
-                setMenu(false);
-              }}
-              style={span === item ? styles.menuOn : styles.menuRow}>
-              <Text style={span === item ? styles.menuOnText : styles.menuText}>{labels[item]}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.menuWrap}>
+          <View style={styles.menu}>
+            {SPANS.map((item, index) => (
+              <Pressable
+                key={item}
+                accessibilityRole="button"
+                onPress={() => {
+                  setSpan(item);
+                  setMenu(false);
+                }}
+                style={[
+                  span === item ? styles.menuOn : styles.menuRow,
+                  index === 0 ? styles.menuFirst : null,
+                  index === SPANS.length - 1 ? styles.menuLast : null,
+                ]}>
+                <Text style={span === item ? styles.menuOnText : styles.menuText}>{labels[item]}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       ) : null}
       <FlatList
@@ -176,7 +190,7 @@ function FilterGlyph({active}: {active: boolean}) {
 
 const styles = StyleSheet.create({
   screen: {flex: 1, backgroundColor: '#FFFFFF'},
-  top: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8},
+  top: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, zIndex: 5},
   topSide: {width: 44, height: 44, alignItems: 'center', justifyContent: 'center'},
   header: {
     flex: 1,
@@ -190,22 +204,32 @@ const styles = StyleSheet.create({
   glyphWide: {width: 18},
   glyphMid: {width: 12},
   glyphNarrow: {width: 6},
-  menu: {
+  scrim: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 3,
+  },
+  menuWrap: {
     position: 'absolute',
     top: 52,
     right: 16,
     zIndex: 4,
     width: 168,
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    paddingVertical: 6,
     shadowColor: '#1C1430',
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: {width: 0, height: 8},
   },
+  menu: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
   menuRow: {paddingHorizontal: 16, paddingVertical: 10},
   menuOn: {paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F3EEFF'},
+  menuFirst: {borderTopLeftRadius: 10, borderTopRightRadius: 10},
+  menuLast: {borderBottomLeftRadius: 10, borderBottomRightRadius: 10},
   menuText: {fontSize: 16, fontWeight: '600', color: settingsColors.ink},
   menuOnText: {fontSize: 16, fontWeight: '700', color: settingsColors.link},
   list: {paddingHorizontal: 16, gap: 10, paddingBottom: 120},

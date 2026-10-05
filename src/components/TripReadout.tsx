@@ -20,8 +20,8 @@ export function TripReadout({speedMps}: Props) {
 const styles = StyleSheet.create({
   card: {
     position: 'absolute',
-    left: 16,
-    bottom: 168,
+    right: 14,
+    bottom: 188,
     width: 78,
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.94)',

@@ -19,6 +19,8 @@ import NativeTripSession from '../native/NativeTripSession';
 import {useSettingsStore} from '../store/settingsStore';
 import {googleSearchOn, suggestPlaces, suggestPlacesNow} from '../services/maps/Geocoder';
 import {googleResolve, hasCoordinates} from '../services/maps/googlePlaces';
+import {asPlace, matchesHistory, type HistoryPlace} from '../services/search/searchHistory';
+import {useSearchHistoryStore} from '../store/searchHistoryStore';
 import {dictate, stopDictation} from '../services/navigation/dictate';
 import {stopManeuverSpeech} from '../services/navigation/speakCue';
 import {useSessionStore} from '../store/sessionStore';
@@ -98,7 +100,9 @@ export function DestinationBar({
 
   const latitude = useSessionStore(state => state.displayLatitude);
   const longitude = useSessionStore(state => state.displayLongitude);
+  const recents = useSearchHistoryStore(state => state.items);
   const here = latitude != null && longitude != null ? {latitude, longitude} : null;
+  const shownRecents = recents.filter(item => matchesHistory(item, query));
 
   const lookup = (value: string) => {
     asked.current = value;
@@ -266,6 +270,7 @@ export function DestinationBar({
         open={open}
         query={query}
         results={results}
+        recents={shownRecents}
         empty={empty}
         listening={listening}
         keyboard={keyboard}
@@ -286,6 +291,7 @@ function SearchSheet({
   open,
   query,
   results,
+  recents,
   empty,
   listening,
   keyboard,
@@ -301,6 +307,7 @@ function SearchSheet({
   open: boolean;
   query: string;
   results: Place[];
+  recents: HistoryPlace[];
   empty: boolean;
   listening: boolean;
   keyboard: number;
@@ -377,40 +384,76 @@ function SearchSheet({
               </Pressable>
             </View>
           </View>
-          {empty && results.length === 0 ? (
+          {empty && results.length === 0 && recents.length === 0 ? (
             <Text style={[type.caption, {color: colors.textSecondary}]}>{copy.searchEmpty}</Text>
           ) : null}
           <ScrollView keyboardShouldPersistTaps="always" style={styles.results} contentContainerStyle={styles.resultsContent}>
-            {results.map(place => {
-              const away =
-                place.distanceM != null
-                  ? place.distanceM
-                  : here && hasCoordinates(place)
-                    ? haversineMeters(here.latitude, here.longitude, place.latitude, place.longitude)
-                    : null;
-              return (
-                <Pressable key={place.id} accessibilityRole="button" onPressIn={() => onChoose(place)} style={styles.hit}>
-                  <View style={styles.hitCopy}>
-                    <Text numberOfLines={1} style={[type.bodyStrong, {color: colors.textPrimary}]}>
-                      {place.name}
-                    </Text>
-                    {place.detail ? (
-                      <Text numberOfLines={1} style={[type.caption, {color: colors.textSecondary}]}>
-                        {place.detail}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {away != null ? (
-                    <Text style={[type.caption, styles.away, {color: colors.textSecondary}]}>{formatDistance(away)}</Text>
-                  ) : null}
-                </Pressable>
-              );
-            })}
+            {recents.length > 0 ? (
+              <Text style={[type.caption, styles.recentLabel, {color: colors.textSecondary}]}>{copy.recentSearches}</Text>
+            ) : null}
+            {recents.map(item => (
+              <HistoryRow
+                key={`recent-${item.id}`}
+                place={asPlace(item)}
+                here={here}
+                onChoose={onChoose}
+              />
+            ))}
+            {results
+              .filter(place => !recents.some(item => sameShown(item, place)))
+              .map(place => (
+                <HistoryRow key={place.id} place={place} here={here} onChoose={onChoose} />
+              ))}
           </ScrollView>
         </View>
       </View>
     </Modal>
   );
+}
+
+function HistoryRow({
+  place,
+  here,
+  onChoose,
+}: {
+  place: Place;
+  here: {latitude: number; longitude: number} | null;
+  onChoose: (place: Place) => void;
+}) {
+  const {colors} = useTheme();
+  const away =
+    place.distanceM != null
+      ? place.distanceM
+      : here && hasCoordinates(place)
+        ? haversineMeters(here.latitude, here.longitude, place.latitude, place.longitude)
+        : null;
+  return (
+    <Pressable accessibilityRole="button" onPressIn={() => onChoose(place)} style={styles.hit}>
+      <View style={styles.hitCopy}>
+        <Text numberOfLines={1} style={[type.bodyStrong, {color: colors.textPrimary}]}>
+          {place.name}
+        </Text>
+        {place.detail ? (
+          <Text numberOfLines={1} style={[type.caption, {color: colors.textSecondary}]}>
+            {place.detail}
+          </Text>
+        ) : null}
+      </View>
+      {away != null ? (
+        <Text style={[type.caption, styles.away, {color: colors.textSecondary}]}>{formatDistance(away)}</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function sameShown(item: HistoryPlace, place: Place): boolean {
+  if (item.id === place.id) {
+    return true;
+  }
+  if (!hasCoordinates(place)) {
+    return item.name.trim().toLowerCase() === place.name.trim().toLowerCase();
+  }
+  return haversineMeters(item.latitude, item.longitude, place.latitude, place.longitude) < 40;
 }
 
 function SearchGlyph({color}: {color: string}) {
@@ -508,6 +551,7 @@ const styles = StyleSheet.create({
   },
   results: {flex: 1},
   resultsContent: {paddingBottom: 12},
+  recentLabel: {fontWeight: '700', marginTop: 4, marginBottom: 2},
   hit: {flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12},
   hitCopy: {flex: 1, gap: 2},
   away: {fontWeight: '700'},

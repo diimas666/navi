@@ -313,6 +313,7 @@ function initMap(){
   var dest = null;
   var user = null;
   var following = true;
+  var dragging = false;
   var placeService = null;
   var marks = [];
   var colors = ${JSON.stringify(nearbyColors)};
@@ -345,8 +346,8 @@ function initMap(){
   }
   window.navi = {
     view: function(lat, lng, zoomLevel, follow, focal, height, heading, showUser){
-      following = !!follow;
-      if (follow) {
+      following = !!follow && !dragging;
+      if (following) {
         map.moveCamera({center: shifted(lat, lng, zoomLevel, focal, height), zoom: zoomLevel});
       }
       if (showUser) {
@@ -469,12 +470,21 @@ function initMap(){
       hoodMarks.push(mark);
     });
   }
-  map.addListener('dragstart', function(){ following = false; post({type:'gesture', holding:true, zoom: map.getZoom()}); });
+  map.addListener('dragstart', function(){
+    dragging = true;
+    following = false;
+    post({type:'gesture', holding:true, zoom: map.getZoom()});
+  });
   map.addListener('idle', function(){
     refreshLabels();
     var center = map.getCenter();
     if (center) post({type:'look', lat: center.lat(), lng: center.lng(), zoom: map.getZoom()});
-    if (!following) post({type:'gesture', holding:false, zoom: map.getZoom()});
+    if (dragging) {
+      dragging = false;
+      post({type:'gesture', holding:false, zoom: map.getZoom()});
+    } else if (!following) {
+      post({type:'gesture', holding:false, zoom: map.getZoom()});
+    }
   });
   refreshLabels();
   map.addListener('click', function(event){

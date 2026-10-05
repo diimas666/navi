@@ -9,6 +9,8 @@ import {useTheme} from '../theme/ThemeProvider';
 import {formatTravel} from '../utils/format';
 
 const GO_FILL_MS = 8500;
+const HUD_HIDE_MS = 20_000;
+const HUD_SLIDE = 220;
 
 type PreviewProps = {
   mode: 'preview';
@@ -27,6 +29,7 @@ type DriveProps = {
   seconds: number;
   place: string;
   others: RoutePlan[];
+  wake?: number;
   onPick: (route: RoutePlan) => void;
   onEnd: () => void;
 };
@@ -42,11 +45,15 @@ export function TripPanel(props: Props) {
   const travel = formatTravel(props.seconds, copy.hours, copy.minutes);
   const arrival = clockAfter(props.seconds);
   const [menu, setMenu] = useState(false);
+  const [hudOn, setHudOn] = useState(true);
   const fill = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const slide = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(1)).current;
   const run = useRef<Animated.CompositeAnimation | null>(null);
   const armed = useRef(false);
   const onGoRef = useRef<() => void>(() => undefined);
+  const wake = props.mode === 'drive' ? props.wake ?? 0 : 0;
   if (props.mode === 'preview') {
     onGoRef.current = props.onGo;
   }
@@ -82,6 +89,35 @@ export function TripPanel(props: Props) {
       anim.stop();
     };
   }, [fill, props.mode, scale]);
+
+  useEffect(() => {
+    if (props.mode !== 'drive' || menu) {
+      return;
+    }
+    setHudOn(true);
+    Animated.parallel([
+      Animated.spring(slide, {toValue: 0, friction: 8, useNativeDriver: true}),
+      Animated.timing(fade, {toValue: 1, duration: 280, useNativeDriver: true}),
+    ]).start();
+    const timer = setTimeout(() => {
+      setHudOn(false);
+      Animated.parallel([
+        Animated.timing(slide, {
+          toValue: HUD_SLIDE,
+          duration: 420,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fade, {
+          toValue: 0,
+          duration: 320,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, HUD_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [fade, menu, props.mode, slide, wake]);
 
   const goNow = () => {
     if (!armed.current) {
@@ -124,20 +160,24 @@ export function TripPanel(props: Props) {
   }
   return (
     <>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setMenu(true)}
-        style={[styles.eta, {bottom: barBottom + 84, backgroundColor: colors.glass}]}>
-        <View style={styles.etaCopy}>
-          <Text style={[styles.etaTime, {color: colors.textPrimary}]}>{`~${travel}`}</Text>
-          {props.place ? (
-            <Text numberOfLines={1} style={[styles.etaPlace, {color: colors.textSecondary}]}>
-              {props.place}
-            </Text>
-          ) : null}
-        </View>
-        <Text style={[styles.etaKm, {color: colors.textSecondary}]}>{km}</Text>
-      </Pressable>
+      <Animated.View
+        pointerEvents={hudOn ? 'box-none' : 'none'}
+        style={[styles.etaWrap, {bottom: barBottom + 84, opacity: fade, transform: [{translateY: slide}]}]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setMenu(true)}
+          style={[styles.eta, {backgroundColor: colors.glass}]}>
+          <View style={styles.etaCopy}>
+            <Text style={[styles.etaTime, {color: colors.textPrimary}]}>{`~${travel}`}</Text>
+            {props.place ? (
+              <Text numberOfLines={1} style={[styles.etaPlace, {color: colors.textSecondary}]}>
+                {props.place}
+              </Text>
+            ) : null}
+          </View>
+          <Text style={[styles.etaKm, {color: colors.textSecondary}]}>{km}</Text>
+        </Pressable>
+      </Animated.View>
       <Modal transparent visible={menu} animationType="slide" onRequestClose={() => setMenu(false)}>
         <View style={styles.menuFill}>
           <Pressable accessibilityRole="button" onPress={() => setMenu(false)} style={[styles.scrim, {backgroundColor: colors.scrim}]} />
@@ -215,10 +255,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B6FE8',
   },
   goLabel: {color: '#FFFFFF', fontSize: 18, fontWeight: '700', zIndex: 1},
-  eta: {
+  etaWrap: {
     position: 'absolute',
     left: 16,
     right: 16,
+  },
+  eta: {
     minHeight: 56,
     borderRadius: 18,
     flexDirection: 'row',
