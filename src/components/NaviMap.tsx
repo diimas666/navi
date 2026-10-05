@@ -87,12 +87,14 @@ type Props = {
   onPlaceGo?: (place: NearbyPlace) => void;
   destination?: {longitude: number; latitude: number; name?: string} | null;
   destinationPin?: boolean;
+  stops?: Array<{longitude: number; latitude: number; name?: string}>;
   tracking?: boolean;
   headingUp?: boolean;
   fitToken?: number;
   buildings3d?: boolean;
   speedMps?: number;
   located?: boolean;
+  nightMap?: boolean;
 };
 
 export function NaviMap({
@@ -114,14 +116,17 @@ export function NaviMap({
   onPlaceGo,
   destination,
   destinationPin,
+  stops = [],
   tracking,
   headingUp = true,
   fitToken = 0,
   buildings3d = false,
   speedMps = 0,
   located = true,
+  nightMap = false,
 }: Props) {
   const {colors, mode} = useTheme();
+  const mapMode = nightMap ? 'dark' : mode;
   const language = useSettingsStore(state => state.language);
   const placeIcons = useSettingsStore(state => state.placeIcons);
   const copy = uiCopy(language);
@@ -134,7 +139,7 @@ export function NaviMap({
   const [frameWidth, setFrameWidth] = useState(0);
   const [mapReady, setMapReady] = useState(false);
   const pitched = Boolean(buildings3d && tracking);
-  const streetLabels = mode === 'dark' ? 'highway_name_other' : 'highway-name-path';
+  const streetLabels = mapMode === 'dark' ? 'highway_name_other' : 'highway-name-path';
   const pinned = Boolean(tracking && follow && headingUp);
   const frame = frameHeight || 780;
   const course = pinned
@@ -157,7 +162,7 @@ export function NaviMap({
     GOOGLE_MAPS_KEY.length > 20 &&
     googleWebViewReady() &&
     (googleLive || !offlineMap);
-  const styleKind = `${mode}:${basemap ? 'styled' : 'url'}`;
+  const styleKind = `${mapMode}:${basemap ? 'styled' : 'url'}`;
   const seenStyle = useRef(styleKind);
   const styleGeneration = useRef(0);
   if (seenStyle.current !== styleKind) {
@@ -332,7 +337,7 @@ export function NaviMap({
 
   useEffect(() => {
     let live = true;
-    loadBasemapStyle(mode).then(style => {
+    loadBasemapStyle(mapMode).then(style => {
       if (live && style) {
         setBasemap(style);
       }
@@ -340,7 +345,7 @@ export function NaviMap({
     return () => {
       live = false;
     };
-  }, [mode]);
+  }, [mapMode]);
 
   useEffect(() => {
     if (!mapReady || zoomToken === 0) {
@@ -446,7 +451,7 @@ export function NaviMap({
       }}>
       <Map
         style={styles.fill}
-        mapStyle={chooseMapStyle(linkKnown && !online, basemap, mode)}
+        mapStyle={chooseMapStyle(linkKnown && !online, basemap, mapMode)}
         compass={false}
         onDidFinishLoadingMap={() => {
           if (styleGeneration.current === styleGenerationNow) {
@@ -537,7 +542,7 @@ export function NaviMap({
             minzoom={14.5}
             filter={['!=', ['get', 'hide_3d'], true]}
             paint={{
-              'fill-extrusion-color': mode === 'dark' ? '#3C3A44' : '#D7D2C8',
+              'fill-extrusion-color': mapMode === 'dark' ? '#3C3A44' : '#D7D2C8',
               'fill-extrusion-height': ['max', ['to-number', ['get', 'render_height']], 8],
               'fill-extrusion-base': ['coalesce', ['to-number', ['get', 'render_min_height']], 0],
               'fill-extrusion-opacity': 0.96,
@@ -552,7 +557,7 @@ export function NaviMap({
               type="line"
               minzoom={13}
               paint={{
-                'line-color': mode === 'dark' ? '#8E86A8' : '#9AA3AE',
+                'line-color': mapMode === 'dark' ? '#8E86A8' : '#9AA3AE',
                 'line-width': 2.4,
               }}
             />
@@ -572,8 +577,8 @@ export function NaviMap({
                 'text-padding': 2,
               }}
               paint={{
-                'text-color': mode === 'dark' ? '#F4F0FF' : '#3A3348',
-                'text-halo-color': mode === 'dark' ? '#1C1430' : '#F7F4EE',
+                'text-color': mapMode === 'dark' ? '#F4F0FF' : '#3A3348',
+                'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#F7F4EE',
                 'text-halo-width': 1.4,
               }}
             />
@@ -708,6 +713,26 @@ export function NaviMap({
               </Marker>
             ))
           : null}
+        {stops.map((stop, index) => (
+          <Marker
+            key={`stop-${stop.longitude}-${stop.latitude}-${index}`}
+            id={`stop-${index}`}
+            lngLat={[stop.longitude, stop.latitude]}
+            anchor="center">
+            <View style={styles.stopWrap}>
+              {!tracking && stop.name ? (
+                <View style={styles.destName}>
+                  <Text numberOfLines={1} style={styles.destNameText}>
+                    {stop.name}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.stopPin}>
+                <Text style={styles.stopLetter}>{waypointLetter(index)}</Text>
+              </View>
+            </View>
+          </Marker>
+        ))}
         {destination ? (
           <Marker
             key={`${destination.longitude}-${destination.latitude}`}
@@ -751,12 +776,14 @@ export function NaviMap({
             }
             alternatives={otherRoutes}
             destination={destination ?? null}
+            stops={stops}
             routeColor={colors.route}
             language={language}
             fitToken={fitToken}
             showUser={!pinned && located}
             placeIcons={placeIcons}
             nearby={nearby}
+            night={mapMode === 'dark'}
             onUserMove={onUserMove}
             onGesture={onGesture}
             onLook={(lookLatitude, lookLongitude, lookZoom) => {
@@ -828,7 +855,7 @@ export function NaviMap({
                 key={`city-${item.name}-${item.lat}`}
                 style={[
                   styles.cityDistrict,
-                  mode === 'dark' ? styles.cityDistrictDark : null,
+                  mapMode === 'dark' ? styles.cityDistrictDark : null,
                   {left: point.x, top: point.y},
                 ]}>
                 {item.name}
@@ -853,7 +880,7 @@ export function NaviMap({
                 key={`hood-${item.name}-${item.lat}`}
                 style={[
                   styles.hoodDistrict,
-                  mode === 'dark' ? styles.hoodDistrictDark : null,
+                  mapMode === 'dark' ? styles.hoodDistrictDark : null,
                   {left: point.x, top: point.y},
                 ]}>
                 {item.name}
@@ -1013,6 +1040,10 @@ function labelPoint(coordinates: Array<[number, number]>, avoid: Array<[number, 
   return best;
 }
 
+function waypointLetter(index: number): string {
+  return String.fromCharCode(65 + (index % 26));
+}
+
 function RouteTimeBadge({
   label,
   best,
@@ -1123,6 +1154,18 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#FFFFFF',
   },
+  stopWrap: {alignItems: 'center', gap: 4},
+  stopPin: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#6B4EE0',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopLetter: {color: '#FFFFFF', fontSize: 13, lineHeight: 16, fontWeight: '800'},
   poi: {
     width: 22,
     height: 22,

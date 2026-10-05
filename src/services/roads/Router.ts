@@ -1,6 +1,7 @@
 import type {RoutePlan} from '../../models/domain';
 import {haversineMeters} from '../../utils/geo';
 import type {IndexedEdge, RoadGraph} from './RoadGraph';
+import {highwayLimitKmh} from '../navigation/speedLimit';
 
 const URBAN_SPEED_MPS = 16;
 
@@ -63,6 +64,7 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
         latitude,
         longitude,
         kind: steps.length === 0 ? 'depart' : 'turn',
+        speedKmh: highwayLimitKmh(edge.highway),
       });
     }
     distanceM += edge.lengthM;

@@ -1,13 +1,62 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Animated, Easing, Pressable, StyleSheet, Text, View} from 'react-native';
+import {useEffect, useRef, useState} from 'react';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
+
+import {useSessionStore} from '../store/sessionStore';
 
 const active = '#178F8A';
 const idle = '#1A1A1A';
 const selectedFill = '#F1F1F3';
+const HUD_HIDE_MS = 20_000;
+const HUD_SLIDE = 120;
 
 export function FloatingTabBar({state, descriptors, navigation, insets}: BottomTabBarProps) {
+  const driving = useSessionStore(store => store.driving);
+  const wake = useSessionStore(store => store.hudWake);
+  const [shown, setShown] = useState(true);
+  const hide = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!driving) {
+      setShown(true);
+      Animated.timing(hide, {
+        toValue: 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    setShown(true);
+    Animated.timing(hide, {
+      toValue: 0,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+    const timer = setTimeout(() => {
+      setShown(false);
+      Animated.timing(hide, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }, HUD_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [driving, hide, wake]);
+
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, {paddingBottom: Math.max(insets.bottom, 12)}]}>
+    <Animated.View
+      pointerEvents={driving && !shown ? 'none' : 'box-none'}
+      style={[
+        styles.wrap,
+        {
+          paddingBottom: Math.max(insets.bottom, 12),
+          opacity: hide.interpolate({inputRange: [0, 1], outputRange: [1, 0]}),
+          transform: [{translateY: hide.interpolate({inputRange: [0, 1], outputRange: [0, HUD_SLIDE]})}],
+        },
+      ]}>
       <View style={styles.pill}>
         {state.routes.map((route, index) => {
           const focused = state.index === index;
@@ -41,7 +90,7 @@ export function FloatingTabBar({state, descriptors, navigation, insets}: BottomT
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

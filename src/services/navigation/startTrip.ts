@@ -10,8 +10,9 @@ import {streetRoutes} from '../roads/StreetRouter';
 import {haversineMeters, projectOntoSegment} from '../../utils/geo';
 import {placeFix} from './placeFix';
 import {distanceToRoute, shouldRebuild} from './offRoute';
-import {keepDistinctRoutes} from './routeChoice';
+import {keepDistinctRoutes, dropPassedStops, isAirLine} from './routeChoice';
 import {matchesStreet} from '../maps/addressQuery';
+import {planThroughStops} from './joinPlans';
 
 export type TripStart = 'ok' | 'denied' | 'failed' | 'missing';
 
@@ -64,7 +65,9 @@ export async function startTripTo(
     return 'missing';
   }
   session.setAlternatives(routes);
-  session.setFollow(false);
+  if (!session.driving) {
+    session.setFollow(false);
+  }
   session.setRoute(planned, place.name, {
     latitude: place.latitude,
     longitude: place.longitude,
@@ -116,24 +119,30 @@ async function collectRoutes(
   const from = {latitude: originLat, longitude: originLon};
   const straight = haversineMeters(originLat, originLon, destinationLat, destinationLon);
   const heading = departHeading();
+  const stops = dropPassedStops(useSessionStore.getState().stops, originLat, originLon);
+  if (stops.length !== useSessionStore.getState().stops.length) {
+    useSessionStore.getState().setStops(stops);
+  }
   const finish = (route: RoutePlan, via: RoutePlan['via']): RoutePlan => ({
     ...nameArrival(reachHouse(route, destinationLat, destinationLon), placeName),
     via,
   });
   let street: RoutePlan[] = [];
   try {
-    const alongStreets = await streetRoutes(originLat, originLon, destinationLat, destinationLon, heading);
+    const alongStreets = await streetRoutes(originLat, originLon, destinationLat, destinationLon, heading, stops);
     street = alongStreets
       .filter(route => startsNear(route, originLat, originLon))
       .map(route => finish(route, 'street'));
   } catch {
     // Street routing needs a network response. The saved graph is the fallback.
   }
-  const offline = planRoutes(routingGraph(), originLat, originLon, destinationLat, destinationLon)
+  const offline = planThroughStops(routingGraph(), originLat, originLon, destinationLat, destinationLon, stops)
     .map(route => finish(route, 'graph'))
     .filter(route => startsNear(route, originLat, originLon));
-  let pool = [...street, ...offline].sort((left, right) => left.distanceM - right.distanceM);
-  if (straight < 900 && isLongLoop(pool[0], straight)) {
+  let pool = [...street, ...offline]
+    .filter(route => !isAirLine(route))
+    .sort((left, right) => left.distanceM - right.distanceM);
+  if (stops.length === 0 && straight < 900 && isLongLoop(pool[0], straight)) {
     const curb = nearerCurb(destinationLat, destinationLon, originLat, originLon);
     if (curb) {
       try {
@@ -142,14 +151,18 @@ async function collectRoutes(
         )
           .filter(route => startsNear(route, originLat, originLon))
           .map(route => finish(route, 'street'));
-        pool = [...retry, ...pool].sort((left, right) => left.distanceM - right.distanceM);
+        pool = [...retry, ...pool]
+          .filter(route => !isAirLine(route))
+          .sort((left, right) => left.distanceM - right.distanceM);
       } catch {
         // The first street answer stays if the nearer curb request fails.
       }
       const graphRetry = planRoutes(routingGraph(), originLat, originLon, curb.latitude, curb.longitude)
         .map(route => finish(route, 'graph'))
         .filter(route => startsNear(route, originLat, originLon));
-      pool = [...graphRetry, ...pool].sort((left, right) => left.distanceM - right.distanceM);
+      pool = [...graphRetry, ...pool]
+        .filter(route => !isAirLine(route))
+        .sort((left, right) => left.distanceM - right.distanceM);
     }
   }
   if (pool.length > 0) {
@@ -222,7 +235,7 @@ function directApproach(
   destinationLon: number,
 ): RoutePlan | null {
   const gap = haversineMeters(originLat, originLon, destinationLat, destinationLon);
-  if (gap < 25 || gap > LOCAL_START_M) {
+  if (gap < 25 || gap > 90) {
     return null;
   }
   return {
@@ -278,7 +291,7 @@ function reachHouse(plan: RoutePlan, latitude: number, longitude: number): Route
     return plan;
   }
   const gap = haversineMeters(last[1], last[0], latitude, longitude);
-  if (gap < 25) {
+  if (gap < 25 || gap > 90) {
     return plan;
   }
   return {

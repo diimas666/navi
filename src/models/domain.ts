@@ -29,6 +29,11 @@ export type RoadNetwork = {
   edges: RoadEdge[];
 };
 
+export type LaneHint = {
+  valid: boolean;
+  indication: 'left' | 'right' | 'straight' | 'uturn';
+};
+
 export type RouteStep = {
   name: string;
   distanceM: number;
@@ -38,6 +43,9 @@ export type RouteStep = {
   coordinates?: Array<[number, number]>;
   kind?: string;
   modifier?: string;
+  exit?: number;
+  lanes?: LaneHint[];
+  speedKmh?: number;
 };
 
 export type RoutePlan = {

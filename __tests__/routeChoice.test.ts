@@ -1,4 +1,4 @@
-import {keepDistinctRoutes} from '../src/services/navigation/routeChoice';
+import {dropPassedStops, isAirLine, keepDistinctRoutes} from '../src/services/navigation/routeChoice';
 import type {RoutePlan} from '../src/models/domain';
 
 function line(lat: number, lonStart: number, lonEnd: number, distanceM: number): RoutePlan {
@@ -25,4 +25,26 @@ test('a road that leaves the corridor for a long stretch stays', () => {
     return [lon, shifted];
   });
   expect(keepDistinctRoutes([main, other])).toHaveLength(2);
+});
+
+test('a 4.5 km two-point line is treated as flying through houses', () => {
+  const air: RoutePlan = {
+    distanceM: 4500,
+    durationS: 360,
+    steps: [],
+    coordinates: [
+      [30.72, 46.48],
+      [30.72, 46.52],
+    ],
+  };
+  const street = line(46.48, 30.72, 30.78, 5200);
+  expect(isAirLine(air)).toBe(true);
+  expect(isAirLine(street)).toBe(false);
+});
+
+test('a passed gas stop is dropped from the rest of the trip', () => {
+  const gas = {latitude: 46.48, longitude: 30.73};
+  const later = {latitude: 46.5, longitude: 30.8};
+  expect(dropPassedStops([gas, later], 46.4801, 30.7301)).toEqual([later]);
+  expect(dropPassedStops([gas, later], 46.4, 30.7)).toEqual([gas, later]);
 });

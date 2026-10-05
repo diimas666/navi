@@ -1,7 +1,7 @@
 import {create} from 'zustand';
 
 import {uiCopy} from '../i18n/uiCopy';
-import type {RoutePlan, TrustLevel} from '../models/domain';
+import type {Place, RoutePlan, TrustLevel} from '../models/domain';
 import {useSettingsStore} from './settingsStore';
 import type {NativeSnapshot} from '../native/NativeTripSession';
 
@@ -19,6 +19,9 @@ type SessionState = {
   destinationName: string | null;
   destinationLatitude: number | null;
   destinationLongitude: number | null;
+  driving: boolean;
+  hudWake: number;
+  stops: Place[];
   follow: boolean;
   recording: boolean;
   locked: boolean;
@@ -35,6 +38,9 @@ type SessionState = {
   ) => void;
   setAlternatives: (routes: RoutePlan[]) => void;
   markRouteMissing: (note?: string) => void;
+  setDriving: (driving: boolean) => void;
+  bumpHud: () => void;
+  setStops: (stops: Place[]) => void;
   setFollow: (follow: boolean) => void;
   setRecording: (recording: boolean) => void;
   lockPosition: (latitude: number, longitude: number, heading: number, manual?: boolean) => void;
@@ -56,6 +62,9 @@ export const useSessionStore = create<SessionState>(set => ({
   destinationName: null,
   destinationLatitude: null,
   destinationLongitude: null,
+  driving: false,
+  hudWake: 0,
+  stops: [],
   follow: true,
   recording: false,
   locked: false,
@@ -86,6 +95,9 @@ export const useSessionStore = create<SessionState>(set => ({
       routeMissing: true,
       routeNote: note ?? uiCopy(useSettingsStore.getState().language).routeMissing,
     }),
+  setDriving: driving => set({driving}),
+  bumpHud: () => set(state => ({hudWake: state.hudWake + 1})),
+  setStops: stops => set({stops}),
   setFollow: follow => set({follow}),
   setRecording: recording => set({recording}),
   lockPosition: (lockLatitude, lockLongitude, lockHeading, manual = false) =>
@@ -98,6 +110,8 @@ export const useSessionStore = create<SessionState>(set => ({
       destinationName: null,
       destinationLatitude: null,
       destinationLongitude: null,
+      driving: false,
+      stops: [],
       routeMissing: false,
       routeNote: null,
     }),

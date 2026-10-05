@@ -57,3 +57,32 @@ function sampleRoute(coordinates: Array<[number, number]>, stepM: number): Array
   }
   return samples;
 }
+
+export function isAirLine(route: RoutePlan, limitM = 90): boolean {
+  const start = route.coordinates[0];
+  const end = route.coordinates[route.coordinates.length - 1];
+  if (!start || !end) {
+    return true;
+  }
+  const straight = haversineMeters(start[1], start[0], end[1], end[0]);
+  if (straight <= limitM) {
+    return false;
+  }
+  if (route.coordinates.length <= 3) {
+    return true;
+  }
+  return route.distanceM <= straight * 1.06 && route.coordinates.length < 8;
+}
+
+export function dropPassedStops<T extends {latitude: number; longitude: number}>(
+  stops: T[],
+  latitude: number,
+  longitude: number,
+  limitM = 70,
+): T[] {
+  const hit = stops.findIndex(stop => haversineMeters(latitude, longitude, stop.latitude, stop.longitude) < limitM);
+  if (hit < 0) {
+    return stops;
+  }
+  return stops.slice(hit + 1);
+}

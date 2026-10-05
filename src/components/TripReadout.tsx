@@ -1,18 +1,25 @@
 import {StyleSheet, Text, View} from 'react-native';
 
-const CITY_LIMIT_KMH = 50;
+import {uiCopy} from '../i18n/uiCopy';
+import {useSettingsStore} from '../store/settingsStore';
 
 type Props = {
   speedMps: number;
+  limitKmh: number | null;
 };
 
-export function TripReadout({speedMps}: Props) {
+export function TripReadout({speedMps, limitKmh}: Props) {
+  const copy = uiCopy(useSettingsStore(state => state.language));
   const kmh = speedMps * 3.6;
-  const speedColor = kmh > CITY_LIMIT_KMH ? '#E23B3B' : '#2F6FE0';
+  const over = limitKmh != null && kmh > limitKmh + 3;
+  const speedColor = over ? '#E23B3B' : '#2F6FE0';
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, over ? styles.over : null]}>
       <Text style={[styles.speed, {color: speedColor}]}>{String(Math.round(kmh))}</Text>
       <Text style={styles.unit}>км/год</Text>
+      {limitKmh != null ? (
+        <Text style={[styles.limit, over ? styles.limitOver : null]}>{`${copy.maxSpeed} ${limitKmh}`}</Text>
+      ) : null}
     </View>
   );
 }
@@ -34,6 +41,9 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 3},
     zIndex: 7,
   },
+  over: {backgroundColor: 'rgba(255,236,236,0.96)'},
   speed: {fontSize: 28, lineHeight: 32, fontWeight: '800'},
   unit: {color: '#8E84A3', fontSize: 10, fontWeight: '600'},
+  limit: {color: '#6E657F', fontSize: 11, fontWeight: '700', marginTop: 2},
+  limitOver: {color: '#E23B3B'},
 });

@@ -30,8 +30,10 @@ type DriveProps = {
   place: string;
   others: RoutePlan[];
   wake?: number;
+  parkingNear?: boolean;
   onPick: (route: RoutePlan) => void;
   onEnd: () => void;
+  onAlong?: () => void;
 };
 
 type Props = PreviewProps | DriveProps;
@@ -197,6 +199,28 @@ export function TripPanel(props: Props) {
                 <Text style={[styles.altLabel, {color: colors.accent}]}>{`${copy.otherRoute} · ${formatTravel(item.durationS, copy.hours, copy.minutes)}`}</Text>
               </Pressable>
             ))}
+            {props.parkingNear && props.onAlong ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setMenu(false);
+                  props.onAlong?.();
+                }}
+                style={[styles.alt, {backgroundColor: colors.accentSoft}]}>
+                <Text style={[styles.altLabel, {color: colors.accent}]}>{copy.parkingNear}</Text>
+              </Pressable>
+            ) : null}
+            {props.onAlong ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setMenu(false);
+                  props.onAlong?.();
+                }}
+                style={[styles.alt, {backgroundColor: colors.accentSoft}]}>
+                <Text style={[styles.altLabel, {color: colors.accent}]}>{copy.alongRoute}</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => {

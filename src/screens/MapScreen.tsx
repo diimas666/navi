@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from 'react';
 import {Keyboard, StyleSheet, Text, View} from 'react-native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 
+import {AlongSheet} from '../components/AlongSheet';
 import {BottomSheet} from '../components/BottomSheet';
 import {DestinationBar} from '../components/DestinationBar';
 import {HotPlaces} from '../components/HotPlaces';
@@ -16,8 +17,11 @@ import type {Place, RoutePlan, TrustLevel} from '../models/domain';
 import NativeTripSession from '../native/NativeTripSession';
 import {confirmTrip, startTripTo} from '../services/navigation/startTrip';
 import {saveSettings, selectPersisted} from '../services/settings/SettingsRepository';
-import {nextCue, progressAlong} from '../services/navigation/maneuver';
+import {nextCues, progressAlong} from '../services/navigation/maneuver';
 import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue';
+import {speedLimitKmh} from '../services/navigation/speedLimit';
+import {isNightAt} from '../services/maps/sun';
+import {clearOpenNav, loadOpenNav, saveOpenNav} from '../services/navigation/openNav';
 import {saveOpenTrip} from '../hooks/useAppServices';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {uiCopy} from '../i18n/uiCopy';
@@ -44,6 +48,7 @@ export function MapScreen(_props: Props) {
   const routeMissing = useSessionStore(state => state.routeMissing);
   const routeNote = useSessionStore(state => state.routeNote);
   const destinationName = useSessionStore(state => state.destinationName);
+  const roadName = useSessionStore(state => state.roadName);
   const follow = useSessionStore(state => state.follow);
   const baseZoom = useSettingsStore(state => state.baseZoom);
   const keepManualZoom = useSettingsStore(state => state.keepManualZoom);
@@ -73,12 +78,15 @@ export function MapScreen(_props: Props) {
   const [headingUp, setHeadingUp] = useState(true);
   const [buildings3d, setBuildings3d] = useState(false);
   const [fitToken, setFitToken] = useState(0);
-  const [hudWake, setHudWake] = useState(0);
+  const hudWake = useSessionStore(state => state.hudWake);
+  const stops = useSessionStore(state => state.stops);
+  const [alongOpen, setAlongOpen] = useState(false);
   const incomingToken = useLinkStore(state => state.token);
   const movedAt = useRef(0);
   const touching = useRef(false);
   const turnRate = useRef(0);
   const lastHead = useRef<{at: number; heading: number} | null>(null);
+  const nightHold = useRef(false);
   const trust = (snapshot?.trust ?? 'lost') as TrustLevel;
   const drActive = snapshot?.source === 'dr' || snapshot?.source === 'blended';
   const located = latitude != null && longitude != null;
@@ -213,6 +221,7 @@ export function MapScreen(_props: Props) {
     setDriving(false);
     movedAt.current = Date.now();
     useSearchHistoryStore.getState().remember(place);
+    useSessionStore.getState().setStops([]);
     useSessionStore.getState().resetRoute();
     useSessionStore.getState().setFollow(false);
     startTripTo(place)
@@ -233,6 +242,51 @@ export function MapScreen(_props: Props) {
     previewRoute(place);
   }, [incomingToken]);
 
+  useEffect(() => {
+    let alive = true;
+    loadOpenNav()
+      .then(nav => {
+        if (!alive || !nav || useSessionStore.getState().route) {
+          return;
+        }
+        useSessionStore.getState().setStops(nav.stops);
+        setTarget(nav.destination);
+        startTripTo(nav.destination)
+          .then(result => {
+            if (!alive || result !== 'ok') {
+              return;
+            }
+            confirmTrip().catch(() => undefined);
+            setHeadingUp(true);
+            useSessionStore.getState().setFollow(true);
+            setDriving(true);
+            useSessionStore.getState().setDriving(true);
+            useSessionStore.getState().bumpHud();
+          })
+          .catch(() => undefined);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const addStop = (place: Place) => {
+    const dest = destinationPlace(target, destinationName);
+    if (!dest) {
+      return;
+    }
+    const stops = [...useSessionStore.getState().stops, place];
+    useSessionStore.getState().setStops(stops);
+    startTripTo(dest)
+      .then(result => {
+        if (result === 'ok') {
+          saveOpenNav({destination: dest, stops}).catch(() => undefined);
+        }
+      })
+      .catch(() => undefined);
+  };
+
   const depart = () => {
     confirmTrip().catch(() => undefined);
     setHeadingUp(true);
@@ -241,6 +295,12 @@ export function MapScreen(_props: Props) {
     movedAt.current = Date.now();
     useSessionStore.getState().setFollow(true);
     setDriving(true);
+    useSessionStore.getState().setDriving(true);
+    useSessionStore.getState().bumpHud();
+    const dest = destinationPlace(target, destinationName);
+    if (dest) {
+      saveOpenNav({destination: dest, stops: useSessionStore.getState().stops}).catch(() => undefined);
+    }
   };
 
   const cancelTrip = () => {
@@ -251,18 +311,29 @@ export function MapScreen(_props: Props) {
     saveOpenTrip();
     stopManeuverSpeech();
     setDriving(false);
+    useSessionStore.getState().setDriving(false);
+    setAlongOpen(false);
     setBuildings3d(false);
     setTarget(null);
     setPicking(false);
     useSessionStore.getState().resetRoute();
+    clearOpenNav().catch(() => undefined);
     NativeTripSession?.stopNavigation();
   };
 
   const alongM = route && located ? progressAlong(route.coordinates, shownLat, shownLon) : 0;
   const remainingM = route ? Math.max(0, route.distanceM - alongM) : traveledM;
   const remainingS = route && route.distanceM > 0 ? route.durationS * (remainingM / route.distanceM) : 0;
-  const cue = driving && route && located ? nextCue(route, shownLat, shownLon, resolveLanguage(language)) : null;
+  const pair = driving && route && located ? nextCues(route, shownLat, shownLon, resolveLanguage(language)) : null;
+  const cue = pair?.current ?? null;
   const spoken = cue ? `${cue.title}:${Math.round(cue.meters / 20)}` : '';
+  const limitKmh = driving && located ? speedLimitKmh(shownLat, shownLon, route) : null;
+  const nightLive = driving && located && isNightAt(shownLat, shownLon);
+  if (!alongOpen) {
+    nightHold.current = nightLive;
+  }
+  const nightMap = nightHold.current;
+  const nearDest = Boolean(driving && remainingM > 80 && remainingM <= 900);
   useEffect(() => {
     if (!voice) {
       stopManeuverSpeech();
@@ -311,10 +382,12 @@ export function MapScreen(_props: Props) {
       saveOpenTrip();
       stopManeuverSpeech();
       setDriving(false);
+      useSessionStore.getState().setDriving(false);
       setBuildings3d(false);
       setTarget(null);
       setPicking(false);
       useSessionStore.getState().resetRoute();
+      clearOpenNav().catch(() => undefined);
       NativeTripSession?.stopNavigation();
     }, 900);
   }, [driving, located, remainingM, route]);
@@ -333,7 +406,7 @@ export function MapScreen(_props: Props) {
       style={[styles.fill, {backgroundColor: colors.background}]}
       onTouchStart={() => {
         if (driving) {
-          setHudWake(value => value + 1);
+          useSessionStore.getState().bumpHud();
         }
       }}>
       {located ? null : (
@@ -350,6 +423,7 @@ export function MapScreen(_props: Props) {
         follow={follow && located}
         located={located}
         tracking={driving}
+        nightMap={nightMap}
         headingUp={headingUp}
         buildings3d={driving && buildings3d}
         fitToken={fitToken}
@@ -363,6 +437,7 @@ export function MapScreen(_props: Props) {
         zoomToken={zoomToken}
         destination={target}
         destinationPin={target?.kind === 'pin'}
+        stops={stops}
         onMapPress={
           picking
             ? (pressLongitude, pressLatitude) => {
@@ -391,7 +466,7 @@ export function MapScreen(_props: Props) {
             zoomRef.current = zoom;
             useSessionStore.getState().setFollow(false);
             if (driving) {
-              setHudWake(value => value + 1);
+              useSessionStore.getState().bumpHud();
             }
           }
         }}
@@ -423,7 +498,14 @@ export function MapScreen(_props: Props) {
           </View>
         </View>
       ) : null}
-      {cue ? <ManeuverBanner meters={cue.meters} title={cue.title} turn={cue.turn} /> : null}
+      {cue ? (
+        <ManeuverBanner
+          current={cue}
+          after={pair?.after}
+          thenWord={copy.thenCue}
+          street={roadName || cue.street}
+        />
+      ) : null}
       <StatusIcons
         adapterState={adapterState}
         online={online}
@@ -438,7 +520,7 @@ export function MapScreen(_props: Props) {
           <Text style={styles.linkBody}>{adapterReady ? copy.offlineObd : copy.offlinePhone}</Text>
         </View>
       ) : null}
-      <HotPlaces />
+      {driving ? null : <HotPlaces />}
       <MapControls
         follow={follow}
         locked={manualLock}
@@ -480,6 +562,7 @@ export function MapScreen(_props: Props) {
             true,
           );
         }}
+        onAlong={() => setAlongOpen(true)}
         onFollow={() => {
           const settings = useSettingsStore.getState();
           if (!settings.keepManualZoom) {
@@ -501,7 +584,7 @@ export function MapScreen(_props: Props) {
           setZoomToken(token => token + 1);
         }}
       />
-      {driving ? <TripReadout speedMps={speedMps} /> : null}
+      {driving ? <TripReadout speedMps={speedMps} limitKmh={limitKmh} /> : null}
       {coachVisible ? (
         <MapCoach
           language={language}
@@ -529,6 +612,8 @@ export function MapScreen(_props: Props) {
           place={destinationName ?? target?.name ?? ''}
           others={alternatives}
           wake={hudWake}
+          parkingNear={nearDest}
+          onAlong={() => setAlongOpen(true)}
           onPick={picked => chooseRoute(picked, true)}
           onEnd={cancelTrip}
         />
@@ -568,8 +653,38 @@ export function MapScreen(_props: Props) {
           )}
         </BottomSheet>
       )}
+      {route && driving && located ? (
+        <AlongSheet
+          open={alongOpen}
+          route={route}
+          here={{latitude: shownLat, longitude: shownLon}}
+          nearDest={nearDest}
+          onClose={() => setAlongOpen(false)}
+          onChoose={place => {
+            setAlongOpen(false);
+            addStop(place);
+          }}
+        />
+      ) : null}
     </View>
   );
+}
+
+function destinationPlace(target: Place | null, name: string | null): Place | null {
+  const session = useSessionStore.getState();
+  const latitude = target?.latitude ?? session.destinationLatitude;
+  const longitude = target?.longitude ?? session.destinationLongitude;
+  if (latitude == null || longitude == null) {
+    return null;
+  }
+  return {
+    id: target?.id ?? `dest-${longitude.toFixed(5)}-${latitude.toFixed(5)}`,
+    name: target?.name ?? name ?? '',
+    latitude,
+    longitude,
+    kind: target?.kind ?? 'place',
+    detail: target?.detail,
+  };
 }
 
 function zoomFor(base: number, speedMps: number, turnDegPerSec: number): number {

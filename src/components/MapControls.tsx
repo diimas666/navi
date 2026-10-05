@@ -23,6 +23,7 @@ type Props = {
   onOverview: () => void;
   onHeading: () => void;
   onNorth: () => void;
+  onAlong?: () => void;
 };
 
 export function MapControls({
@@ -40,6 +41,7 @@ export function MapControls({
   onOverview,
   onHeading,
   onNorth,
+  onAlong,
 }: Props) {
   const {colors} = useTheme();
   const voice = useSettingsStore(state => state.voice);
@@ -64,6 +66,15 @@ export function MapControls({
             <NorthArrow color={headingUp ? '#8AA8A6' : '#149C96'} />
           </Pressable>
         </View>
+        {driving && onAlong ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy.alongRoute}
+            onPress={onAlong}
+            style={styles.dimension}>
+            <Text style={styles.dimensionLabel}>{copy.alongGas}</Text>
+          </Pressable>
+        ) : null}
         {driving ? (
           <Pressable
             accessibilityRole="button"

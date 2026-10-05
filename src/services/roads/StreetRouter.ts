@@ -1,10 +1,20 @@
-import type {RoutePlan} from '../../models/domain';
+import type {LaneHint, RoutePlan} from '../../models/domain';
 import {AppError} from '../errors/AppError';
 import {tripText} from '../../i18n/tripCopy';
 import {uiCopy} from '../../i18n/uiCopy';
 import {geometryStartsNear} from '../navigation/placeFix';
 import {useSettingsStore} from '../../store/settingsStore';
 import {bearingDegrees, haversineMeters} from '../../utils/geo';
+
+type RawStep = {
+  distance?: number;
+  name?: string;
+  geometry?: {coordinates?: Array<[number, number]>};
+  maneuver?: {type?: string; modifier?: string; location?: [number, number]; exit?: number};
+  intersections?: Array<{
+    lanes?: Array<{indications?: string[]; valid?: boolean}>;
+  }>;
+};
 
 export async function streetRoute(
   originLat: number,
@@ -22,19 +32,26 @@ export async function streetRoutes(
   destinationLat: number,
   destinationLon: number,
   heading?: number | null,
+  stops: Array<{latitude: number; longitude: number}> = [],
 ): Promise<RoutePlan[]> {
-  const path = `${originLon},${originLat};${destinationLon},${destinationLat}`;
+  const points = [
+    [originLon, originLat],
+    ...stops.map(stop => [stop.longitude, stop.latitude]),
+    [destinationLon, destinationLat],
+  ];
+  const path = points.map(([lon, lat]) => `${lon},${lat}`).join(';');
   const params = new URLSearchParams({
     overview: 'full',
     geometries: 'geojson',
     steps: 'true',
-    alternatives: '3',
-    approaches: 'unrestricted;unrestricted',
+    alternatives: stops.length > 0 ? 'false' : '3',
+    approaches: points.map(() => 'unrestricted').join(';'),
     continue_straight: 'false',
   });
   if (heading != null && Number.isFinite(heading)) {
     const face = ((Math.round(heading) % 360) + 360) % 360;
-    params.set('bearings', `${face},80;`);
+    const rest = points.slice(1).map(() => '');
+    params.set('bearings', [`${face},80`, ...rest].join(';'));
   }
   const url = `https://router.project-osrm.org/route/v1/driving/${path}?${params.toString()}`;
   const response = await fetch(url, {
@@ -55,18 +72,13 @@ export async function streetRoutes(
       duration?: number;
       geometry?: {coordinates?: Array<[number, number]>};
       legs?: Array<{
-        steps?: Array<{
-          distance?: number;
-          name?: string;
-          geometry?: {coordinates?: Array<[number, number]>};
-          maneuver?: {type?: string; modifier?: string; location?: [number, number]};
-        }>;
+        steps?: RawStep[];
       }>;
     }>;
   };
   if (record.code !== 'Ok' || !record.routes) {
     if (heading != null) {
-      return streetRoutes(originLat, originLon, destinationLat, destinationLon, null);
+      return streetRoutes(originLat, originLon, destinationLat, destinationLon, null, stops);
     }
     return [];
   }
@@ -80,7 +92,7 @@ export async function streetRoutes(
       const plan: RoutePlan = {
         distanceM,
         durationS: route.duration ?? 0,
-        steps: readSteps(route.legs?.[0]?.steps, distanceM),
+        steps: readSteps(route.legs?.flatMap(leg => leg.steps ?? []), distanceM),
         coordinates,
       };
       return plan;
@@ -88,7 +100,7 @@ export async function streetRoutes(
     .filter((route): route is RoutePlan => route != null)
     .sort((left, right) => routeRank(left, heading) - routeRank(right, heading));
   if (ranked.length === 0 && heading != null) {
-    return streetRoutes(originLat, originLon, destinationLat, destinationLon, null);
+    return streetRoutes(originLat, originLon, destinationLat, destinationLon, null, stops);
   }
   return ranked;
 }
@@ -120,15 +132,7 @@ function departureDelta(coordinates: Array<[number, number]>, heading?: number |
   return delta;
 }
 
-function readSteps(
-  raw: Array<{
-    distance?: number;
-    name?: string;
-    geometry?: {coordinates?: Array<[number, number]>};
-    maneuver?: {type?: string; modifier?: string; location?: [number, number]};
-  }> | undefined,
-  distanceM: number,
-) {
+function readSteps(raw: RawStep[] | undefined, distanceM: number) {
   const streets = uiCopy(useSettingsStore.getState().language).streets;
   if (!raw || raw.length === 0) {
     return [{name: streets, distanceM, alongM: 0, kind: 'depart'}];
@@ -146,8 +150,37 @@ function readSteps(
       coordinates: line && line.length > 1 ? line : undefined,
       kind: step.maneuver?.type,
       modifier: step.maneuver?.modifier,
+      exit: step.maneuver?.exit,
+      lanes: readLanes(step.intersections),
     };
     alongM += step.distance ?? 0;
     return item;
   });
+}
+
+function readLanes(
+  intersections: Array<{lanes?: Array<{indications?: string[]; valid?: boolean}>}> | undefined,
+): LaneHint[] | undefined {
+  const lanes = intersections?.find(item => item.lanes && item.lanes.length > 0)?.lanes;
+  if (!lanes || lanes.length === 0) {
+    return undefined;
+  }
+  const hints = lanes.map(lane => ({
+    valid: lane.valid === true,
+    indication: laneSide(lane.indications?.[0] ?? ''),
+  }));
+  return hints.some(item => item.valid) ? hints : undefined;
+}
+
+function laneSide(value: string): LaneHint['indication'] {
+  if (value.includes('uturn')) {
+    return 'uturn';
+  }
+  if (value.includes('left')) {
+    return 'left';
+  }
+  if (value.includes('right')) {
+    return 'right';
+  }
+  return 'straight';
 }

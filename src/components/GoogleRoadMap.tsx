@@ -25,12 +25,14 @@ type Props = {
   route: RoutePlan | null;
   alternatives: RoutePlan[];
   destination: Destination | null;
+  stops?: Destination[];
   routeColor: string;
   language: string;
   fitToken: number;
   showUser: boolean;
   placeIcons: boolean;
   nearby: NearbyPlace[];
+  night?: boolean;
   onUserMove?: (zoom: number) => void;
   onGesture?: (holding: boolean, zoom: number) => void;
   onLook?: (latitude: number, longitude: number, zoom: number) => void;
@@ -52,12 +54,14 @@ export function GoogleRoadMap({
   route,
   alternatives,
   destination,
+  stops = [],
   routeColor,
   language,
   fitToken,
   showUser,
   placeIcons,
   nearby,
+  night = false,
   onUserMove,
   onGesture,
   onLook,
@@ -90,6 +94,8 @@ export function GoogleRoadMap({
   handlers.current = {onUserMove, onGesture, onLook, onMapPress, onPlace, onAlternative, onReady, onFail};
   const placeIconsRef = useRef(placeIcons);
   placeIconsRef.current = placeIcons;
+  const nightRef = useRef(night);
+  nightRef.current = night;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -122,7 +128,7 @@ export function GoogleRoadMap({
   };
 
   const pushPlaces = () => {
-    send(`window.navi.places(${placeIconsRef.current ? 1 : 0})`);
+    send(`window.navi.places(${placeIconsRef.current ? 1 : 0},${nightRef.current ? 1 : 0})`);
   };
 
   const pushMarks = () => {
@@ -139,6 +145,7 @@ export function GoogleRoadMap({
     } else {
       send('window.navi.dest(null)');
     }
+    send(`window.navi.stops(${JSON.stringify(stops)})`);
     if (!tracking && route && route.coordinates.length > 1 && fitToken > 0) {
       send('window.navi.fit()');
     }
@@ -154,7 +161,7 @@ export function GoogleRoadMap({
     pushPlaces();
     // The map page is created once. The switch only flips Google's place icons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeIcons]);
+  }, [placeIcons, night]);
 
   const marksKey = nearby.map(item => item.id).join(',');
   useEffect(() => {
@@ -163,7 +170,8 @@ export function GoogleRoadMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marksKey]);
 
-  const routeKey = `${route?.distanceM ?? 0}:${route?.coordinates.length ?? 0}:${alternatives.length}:${destination?.latitude ?? ''}:${destination?.longitude ?? ''}:${destination?.name ?? ''}:${routeColor}:${fitToken}:${tracking ? 1 : 0}`;
+  const stopsKey = stops.map(item => `${item.latitude},${item.longitude}`).join('|');
+  const routeKey = `${route?.distanceM ?? 0}:${route?.coordinates.length ?? 0}:${alternatives.length}:${destination?.latitude ?? ''}:${destination?.longitude ?? ''}:${destination?.name ?? ''}:${stopsKey}:${routeColor}:${fitToken}:${tracking ? 1 : 0}`;
   useEffect(() => {
     pushRoute();
     // routeKey covers the route payload. pushRoute reads the latest props.
@@ -296,6 +304,17 @@ function initMap(){
       {featureType: 'administrative.neighborhood', stylers: [{visibility: 'on'}]}
     ];
   }
+  function nightStyle(){
+    return [
+      {elementType: 'geometry', stylers: [{color: '#1d1e22'}]},
+      {elementType: 'labels.text.fill', stylers: [{color: '#8a8d96'}]},
+      {elementType: 'labels.text.stroke', stylers: [{color: '#1d1e22'}]},
+      {featureType: 'road', elementType: 'geometry', stylers: [{color: '#2b2d33'}]},
+      {featureType: 'road', elementType: 'geometry.stroke', stylers: [{color: '#16171b'}]},
+      {featureType: 'water', elementType: 'geometry', stylers: [{color: '#0e1620'}]},
+      {featureType: 'landscape', elementType: 'geometry', stylers: [{color: '#22242a'}]}
+    ];
+  }
   var placesOn = ${placeIcons ? 'true' : 'false'};
   var map = new google.maps.Map(document.getElementById('map'), {
     center: {lat: ${latitude}, lng: ${longitude}},
@@ -311,6 +330,7 @@ function initMap(){
   var line = null;
   var altLines = [];
   var dest = null;
+  var stopMarks = [];
   var user = null;
   var following = true;
   var dragging = false;
@@ -398,15 +418,35 @@ function initMap(){
         zIndex: 4
       });
     },
+    stops: function(items){
+      stopMarks.forEach(function(item){ item.setMap(null); });
+      stopMarks = (items || []).map(function(item, index){
+        return new google.maps.Marker({
+          map: map,
+          position: {lat: item.latitude, lng: item.longitude},
+          title: item.name || '',
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 12,
+            fillColor: '#6B4EE0',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 3
+          },
+          label: {text: String.fromCharCode(65 + (index % 26)), color: '#ffffff', fontSize: '12px', fontWeight: '800'},
+          zIndex: 6
+        });
+      });
+    },
     fit: function(){
       if (path.length < 2) return;
       var bounds = new google.maps.LatLngBounds();
       path.forEach(function(point){ bounds.extend({lat: point[1], lng: point[0]}); });
       map.fitBounds(bounds, {top: 120, right: 48, bottom: 280, left: 48});
     },
-    places: function(on){
+    places: function(on, dark){
       placesOn = !!on;
-      map.setOptions({clickableIcons: placesOn, styles: placeStyle(placesOn)});
+      map.setOptions({clickableIcons: placesOn, styles: placeStyle(placesOn).concat(dark ? nightStyle() : [])});
       if (!placesOn) window.navi.marks([]);
     },
     marks: function(items){
