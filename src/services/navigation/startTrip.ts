@@ -309,7 +309,6 @@ export async function rebuildIfOffRoute(
   if (key !== rerouteKey) {
     rerouteKey = key;
     rerouteAt = Date.now();
-    return;
   }
   const away = distanceToRoute(route.coordinates, latitude, longitude);
   if (!shouldRebuild(away, speedMps, Date.now() - rerouteAt)) {

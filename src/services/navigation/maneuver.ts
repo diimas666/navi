@@ -1,5 +1,5 @@
 import type {RoutePlan, RouteStep} from '../../models/domain';
-import {haversineMeters} from '../../utils/geo';
+import {haversineMeters, projectOntoSegment} from '../../utils/geo';
 import type {ResolvedLanguage} from '../../i18n/settingsCopy';
 
 export type ManeuverTurn = 'left' | 'right' | 'straight' | 'uturn' | 'arrive';
@@ -43,8 +43,11 @@ export function nextCue(
   const progress = progressAlong(route.coordinates, latitude, longitude);
   const remaining = Math.max(0, route.distanceM - progress);
   const ahead = route.steps.find(step => step.kind !== 'depart' && (step.alongM ?? 0) > progress + 12);
-  if (!ahead || remaining < 25) {
+  if (remaining < 28) {
     return {meters: remaining, title: text.arrived, turn: 'arrive'};
+  }
+  if (!ahead) {
+    return {meters: remaining, title: text.straight, turn: 'straight'};
   }
   const meters = Math.max(0, (ahead.alongM ?? remaining) - progress);
   return {meters, title: cueTitle(ahead, text), turn: cueTurn(ahead)};
@@ -55,24 +58,57 @@ export function progressAlong(
   latitude: number,
   longitude: number,
 ): number {
+  return progressOnLine(coordinates, latitude, longitude).alongM;
+}
+
+export function remainingCoordinates(
+  coordinates: Array<[number, number]>,
+  latitude: number,
+  longitude: number,
+): Array<[number, number]> {
+  if (coordinates.length < 2) {
+    return coordinates;
+  }
+  const hit = progressOnLine(coordinates, latitude, longitude);
+  const rest = coordinates.slice(hit.index + 1);
+  const start: [number, number] = [hit.longitude, hit.latitude];
+  if (rest.length === 0) {
+    const end = coordinates[coordinates.length - 1];
+    return end ? [start, end] : [start];
+  }
+  const next = rest[0];
+  if (next && haversineMeters(hit.latitude, hit.longitude, next[1], next[0]) < 4) {
+    return rest;
+  }
+  return [start, ...rest];
+}
+
+function progressOnLine(
+  coordinates: Array<[number, number]>,
+  latitude: number,
+  longitude: number,
+): {alongM: number; index: number; latitude: number; longitude: number} {
   let bestOff = Infinity;
   let bestAlong = 0;
+  let bestIndex = 0;
+  let bestLat = latitude;
+  let bestLon = longitude;
   let along = 0;
   for (let index = 1; index < coordinates.length; index += 1) {
     const [lonA, latA] = coordinates[index - 1];
     const [lonB, latB] = coordinates[index];
     const segment = haversineMeters(latA, lonA, latB, lonB);
-    const toStart = haversineMeters(latitude, longitude, latA, lonA);
-    const toEnd = haversineMeters(latitude, longitude, latB, lonB);
-    const off = Math.abs(toStart + toEnd - segment);
-    if (off < bestOff) {
-      bestOff = off;
-      const ratio = segment === 0 ? 0 : Math.min(1, toStart / segment);
-      bestAlong = along + ratio * segment;
+    const hit = projectOntoSegment(latitude, longitude, latA, lonA, latB, lonB);
+    if (hit.distanceM < bestOff) {
+      bestOff = hit.distanceM;
+      bestAlong = along + haversineMeters(latA, lonA, hit.latitude, hit.longitude);
+      bestIndex = index - 1;
+      bestLat = hit.latitude;
+      bestLon = hit.longitude;
     }
     along += segment;
   }
-  return bestAlong;
+  return {alongM: bestAlong, index: bestIndex, latitude: bestLat, longitude: bestLon};
 }
 
 function cueTitle(step: RouteStep, text: (typeof words)['uk']): string {

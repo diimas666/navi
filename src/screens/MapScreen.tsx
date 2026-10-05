@@ -18,6 +18,7 @@ import {confirmTrip, startTripTo} from '../services/navigation/startTrip';
 import {saveSettings, selectPersisted} from '../services/settings/SettingsRepository';
 import {nextCue, progressAlong} from '../services/navigation/maneuver';
 import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue';
+import {saveOpenTrip} from '../hooks/useAppServices';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {uiCopy} from '../i18n/uiCopy';
 import {openAdapterSetup} from '../navigation/navigationRef';
@@ -88,6 +89,9 @@ export function MapScreen(_props: Props) {
   const shownHeading = snapshot?.heading ?? 0;
   const liveSpeed = snapshot?.hasSpeed ? snapshot.speedMps : 0;
   const speedMps = liveSpeed;
+  const [offlineNote, setOfflineNote] = useState(false);
+  const offlineOnce = useRef(false);
+  const arriveHold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFix = useRef<{lat: number; lon: number} | null>(null);
   if (located && follow && !keepManualZoom && !touching.current) {
     zoomRef.current = zoomFor(baseZoom, liveSpeed, turnRate.current);
@@ -194,6 +198,9 @@ export function MapScreen(_props: Props) {
   const routeKey = route ? `${route.distanceM}:${route.coordinates.length}` : '';
   const previewKey = route ? `${route.distanceM}:${route.durationS}:${route.coordinates.length}` : '';
   useEffect(() => {
+    if (route) {
+      return;
+    }
     setDriving(false);
     setBuildings3d(false);
   }, [routeKey]);
@@ -234,6 +241,12 @@ export function MapScreen(_props: Props) {
   };
 
   const cancelTrip = () => {
+    if (arriveHold.current) {
+      clearTimeout(arriveHold.current);
+      arriveHold.current = null;
+    }
+    saveOpenTrip();
+    stopManeuverSpeech();
     setDriving(false);
     setBuildings3d(false);
     setTarget(null);
@@ -258,6 +271,59 @@ export function MapScreen(_props: Props) {
     }
     speakManeuver(cue.meters, cue.title, resolveLanguage(language), cue.turn === 'arrive');
   }, [spoken, driving, cue, language, voice]);
+
+  useEffect(() => {
+    if (!linkKnown) {
+      return;
+    }
+    if (online) {
+      offlineOnce.current = false;
+      setOfflineNote(false);
+      return;
+    }
+    if (offlineOnce.current) {
+      return;
+    }
+    offlineOnce.current = true;
+    setOfflineNote(true);
+    const timer = setTimeout(() => setOfflineNote(false), 4200);
+    return () => clearTimeout(timer);
+  }, [linkKnown, online]);
+
+  useEffect(() => {
+    const near = Boolean(driving && route && located && remainingM <= 48);
+    const lost = !driving || !route || !located || remainingM > 90;
+    if (lost) {
+      if (arriveHold.current) {
+        clearTimeout(arriveHold.current);
+        arriveHold.current = null;
+      }
+      return;
+    }
+    if (!near || arriveHold.current) {
+      return;
+    }
+    arriveHold.current = setTimeout(() => {
+      arriveHold.current = null;
+      saveOpenTrip();
+      stopManeuverSpeech();
+      setDriving(false);
+      setBuildings3d(false);
+      setTarget(null);
+      setPicking(false);
+      useSessionStore.getState().resetRoute();
+      NativeTripSession?.stopNavigation();
+    }, 900);
+  }, [driving, located, remainingM, route]);
+
+  useEffect(() => {
+    return () => {
+      if (arriveHold.current) {
+        clearTimeout(arriveHold.current);
+        arriveHold.current = null;
+      }
+    };
+  }, []);
 
   return (
     <View style={[styles.fill, {backgroundColor: colors.background}]}>
@@ -353,7 +419,7 @@ export function MapScreen(_props: Props) {
         gpsCheck={gpsCheck}
         onSetup={() => openAdapterSetup()}
       />
-      {linkKnown && !online ? (
+      {offlineNote ? (
         <View pointerEvents="none" style={styles.linkBanner}>
           <Text style={styles.linkTitle}>{copy.offline}</Text>
           <Text style={styles.linkBody}>{adapterReady ? copy.offlineObd : copy.offlinePhone}</Text>
@@ -422,7 +488,7 @@ export function MapScreen(_props: Props) {
           setZoomToken(token => token + 1);
         }}
       />
-      {route ? null : <TripReadout speedMps={speedMps} />}
+      {driving ? <TripReadout speedMps={speedMps} /> : null}
       {coachVisible ? (
         <MapCoach
           language={language}

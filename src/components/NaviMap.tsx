@@ -36,6 +36,7 @@ import type {RoutePlan} from '../models/domain';
 import {uiCopy} from '../i18n/uiCopy';
 import {driveBearing, driveFocal, drivePadding, glideDuration} from '../services/maps/cameraPull';
 import {distanceToRoute} from '../services/navigation/offRoute';
+import {remainingCoordinates} from '../services/navigation/maneuver';
 import {routingGraph} from '../services/roads/RegionGraph';
 import {useSettingsStore} from '../store/settingsStore';
 import {useTheme} from '../theme/ThemeProvider';
@@ -51,13 +52,10 @@ const LOCAL_HIGHWAYS = new Set([
 ]);
 
 function chooseMapStyle(
-  offline: boolean,
+  _offline: boolean,
   basemap: StyleSpecification | null,
   mode: 'light' | 'dark',
 ): string | StyleSpecification {
-  if (offline) {
-    return VECTOR_STYLE_URL;
-  }
   if (basemap) {
     return basemap;
   }
@@ -150,14 +148,16 @@ export function NaviMap({
   const online = useMapStore(state => state.online);
   const linkKnown = useMapStore(state => state.linkKnown);
   const offlineMap = linkKnown && !online;
-  const [googleDown, setGoogleDown] = useState(false);
   const [googleLive, setGoogleLive] = useState(false);
   const [look, setLook] = useState({latitude, longitude, zoom: zoomRef.current});
   const [nearby, setNearby] = useState<NearbyPlace[]>([]);
   const [picked, setPicked] = useState<NearbyPlace | null>(null);
   const [hours, setHours] = useState<PlaceHours | null>(null);
-  const useGoogle = !offlineMap && !googleDown && GOOGLE_MAPS_KEY.length > 20 && googleWebViewReady();
-  const styleKind = `${mode}:${offlineMap ? 'off' : 'on'}:${basemap ? 'styled' : 'url'}`;
+  const useGoogle =
+    GOOGLE_MAPS_KEY.length > 20 &&
+    googleWebViewReady() &&
+    (googleLive || !offlineMap);
+  const styleKind = `${mode}:${basemap ? 'styled' : 'url'}`;
   const seenStyle = useRef(styleKind);
   const styleGeneration = useRef(0);
   if (seenStyle.current !== styleKind) {
@@ -314,16 +314,20 @@ export function NaviMap({
       }));
     return {type: 'FeatureCollection' as const, features};
   }, [route]);
+  const liveCoordinates =
+    tracking && route && route.coordinates.length > 1
+      ? remainingCoordinates(route.coordinates, latitude, longitude)
+      : route?.coordinates;
   const routeShape = useMemo(
     () =>
-      route
+      liveCoordinates && liveCoordinates.length > 1
         ? {
             type: 'Feature' as const,
             properties: {},
-            geometry: {type: 'LineString' as const, coordinates: route.coordinates},
+            geometry: {type: 'LineString' as const, coordinates: liveCoordinates},
           }
         : null,
-    [route],
+    [liveCoordinates],
   );
 
   useEffect(() => {
@@ -740,7 +744,11 @@ export function NaviMap({
             follow={follow}
             tracking={Boolean(tracking)}
             frame={frame}
-            route={route}
+            route={
+              route && liveCoordinates && liveCoordinates.length > 1
+                ? {...route, coordinates: liveCoordinates}
+                : route
+            }
             alternatives={otherRoutes}
             destination={destination ?? null}
             routeColor={colors.route}
@@ -774,7 +782,6 @@ export function NaviMap({
             onReady={() => setGoogleLive(true)}
             onFail={() => {
               setGoogleLive(false);
-              setGoogleDown(true);
             }}
           />
         </View>
@@ -873,7 +880,7 @@ function projectOnMap(
   width: number,
   height: number,
 ): {x: number; y: number} | null {
-  const world = 256 * 2 ** zoom;
+  const world = 256 * 2 ** Math.min(22, Math.max(1, zoom));
   const x = width / 2 + ((longitude - centerLon) / 360) * world;
   const y = height / 2 - ((mercatorY(latitude) - mercatorY(centerLat)) / (2 * Math.PI)) * world;
   if (x < -80 || y < -30 || x > width + 80 || y > height + 30) {

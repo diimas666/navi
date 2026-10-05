@@ -317,10 +317,8 @@ function recoverFarRoute(latitude: number, longitude: number): void {
         return;
       }
       if (!planned || !geometryStartsNear(planned.coordinates, latitude, longitude, 50_000)) {
-        current.resetRoute();
         return;
       }
-      current.setFollow(false);
       current.setRoute(planned, current.destinationName, {latitude: destinationLat, longitude: destinationLon});
     })
     .finally(() => {
@@ -455,10 +453,22 @@ function rememberPoint(
   }
 }
 
-function flushTrip(): void {
-  if (track.length < 2) {
+export function saveOpenTrip(): void {
+  flushTrip(true);
+}
+
+function flushTrip(force = false): void {
+  if (track.length < 2 && !force) {
     resetBuffer();
     return;
+  }
+  if (track.length === 0) {
+    if (lastPoint) {
+      track.push(lastPoint);
+    } else {
+      resetBuffer();
+      return;
+    }
   }
   const endedAt = Date.now();
   const drafted = enrichTrip({

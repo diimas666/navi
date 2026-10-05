@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import AVFoundation
+import UIKit
 
 /// Зводить GPS, довіру, OBD і рух в одну оцінку.
 @objc public final class TripSession: NSObject {
@@ -40,6 +41,7 @@ import AVFoundation
   @objc public func stopPreview() {
     preview = false
     if !navigationActive {
+      setIdleTimer(false)
       LocationManager.shared.stopUpdates()
       MotionManager.shared.stop()
     }
@@ -57,6 +59,7 @@ import AVFoundation
     }
     navigationActive = true
     preview = true
+    setIdleTimer(true)
     wire()
     DeadReckoningEngine.shared.reset()
     LocationTrustEngine.shared.reset()
@@ -68,6 +71,7 @@ import AVFoundation
 
   @objc public func stopNavigation() {
     navigationActive = false
+    setIdleTimer(false)
     LocationManager.shared.setBackground(false)
     publish(step: false)
   }
@@ -113,8 +117,7 @@ import AVFoundation
     let gpsSpeed = NeivJSON.double(fix ?? [:], "speed")
     let inertial = MotionManager.shared.inertialSpeedMps()
     let jammed = trust == "lost" || trust == "untrusted"
-    let sensorDrive = navigationActive && !isLinkUp()
-    let followGps = !sensorDrive && !ignoreGps && fix != nil && !jammed
+    let followGps = !ignoreGps && fix != nil && !jammed
     let sensorSpeed = hasVehicle ? vehicle : inertial
     let hasSensorSpeed = hasVehicle || inertial > 0.3
     if hasVehicle {
@@ -122,7 +125,7 @@ import AVFoundation
     } else if followGps && trust == "trusted" && hasGpsSpeed {
       MotionManager.shared.adoptSpeed(gpsSpeed)
     }
-    let integrate = (sensorDrive || jammed) && drAllowed && (navigationActive || preview)
+    let integrate = jammed && drAllowed && (navigationActive || preview)
     let input: NSDictionary = [
       "timestamp": Date().timeIntervalSince1970 * 1000,
       "trust": trust,
@@ -137,7 +140,7 @@ import AVFoundation
       "gpsHeading": NeivJSON.double(fix ?? [:], "heading"),
       "hasVehicleSpeed": hasSensorSpeed,
       "vehicleSpeedMps": sensorSpeed,
-      "hasHeading": !sensorDrive && !jammed && NeivJSON.bool(motion ?? [:], "hasHeading"),
+      "hasHeading": !jammed && NeivJSON.bool(motion ?? [:], "hasHeading"),
       "heading": NeivJSON.double(motion ?? [:], "heading"),
       "headingAccuracy": NeivJSON.double(motion ?? [:], "headingAccuracy"),
       "hasYawRate": NeivJSON.bool(motion ?? [:], "hasYawRate"),
@@ -195,19 +198,14 @@ import AVFoundation
 
   private func setLink(_ up: Bool) {
     linkLock.lock()
-    let changed = linkSatisfied != up
     linkSatisfied = up
     linkLock.unlock()
-    if changed {
-      publish(step: true)
-    }
   }
 
-  private func isLinkUp() -> Bool {
-    linkLock.lock()
-    let value = linkSatisfied
-    linkLock.unlock()
-    return value
+  private func setIdleTimer(_ on: Bool) {
+    DispatchQueue.main.async {
+      UIApplication.shared.isIdleTimerDisabled = on
+    }
   }
 
   private func motionQuality(_ motion: NSDictionary?) -> String {
