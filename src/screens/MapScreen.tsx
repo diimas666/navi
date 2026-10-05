@@ -1,6 +1,8 @@
-import {useEffect, useRef, useState} from 'react';
-import {Keyboard, StyleSheet, Text, View} from 'react-native';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import {Keyboard, Pressable, StyleSheet, Text, View} from 'react-native';
+import type {CompositeScreenProps} from '@react-navigation/native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {AlongSheet} from '../components/AlongSheet';
 import {BottomSheet} from '../components/BottomSheet';
@@ -21,12 +23,15 @@ import {nextCues, progressAlong} from '../services/navigation/maneuver';
 import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue';
 import {speedLimitKmh} from '../services/navigation/speedLimit';
 import {isNightAt} from '../services/maps/sun';
+import {cameraAheadMeters} from '../services/maps/speedCameras';
+import {coverageGapAhead, formatRegionList, missingRegionsAlong} from '../services/maps/regionCoverage';
+import {downloadRegion} from '../services/maps/OfflineMapService';
 import {clearOpenNav, loadOpenNav, saveOpenNav} from '../services/navigation/openNav';
 import {saveOpenTrip} from '../hooks/useAppServices';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {uiCopy} from '../i18n/uiCopy';
 import {openAdapterSetup} from '../navigation/navigationRef';
-import type {MainTabParamList} from '../navigation/types';
+import type {MainTabParamList, RootStackParamList} from '../navigation/types';
 import {useLinkStore} from '../store/linkStore';
 import {useMapStore} from '../store/mapStore';
 import {useSearchHistoryStore} from '../store/searchHistoryStore';
@@ -36,9 +41,12 @@ import {useSettingsStore} from '../store/settingsStore';
 import {haversineMeters} from '../utils/geo';
 import {useTheme} from '../theme/ThemeProvider';
 import {type} from '../theme/typography';
-type Props = BottomTabScreenProps<MainTabParamList, 'Map'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Map'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
-export function MapScreen(_props: Props) {
+export function MapScreen({navigation}: Props) {
   const {colors} = useTheme();
   const snapshot = useSessionStore(state => state.snapshot);
   const latitude = useSessionStore(state => state.displayLatitude);
@@ -328,6 +336,14 @@ export function MapScreen(_props: Props) {
   const cue = pair?.current ?? null;
   const spoken = cue ? `${cue.title}:${Math.round(cue.meters / 20)}` : '';
   const limitKmh = driving && located ? speedLimitKmh(shownLat, shownLon, route) : null;
+  const cameraM = driving && located ? cameraAheadMeters(shownLat, shownLon, shownHeading) : null;
+  const regions = useMapStore(state => state.regions);
+  const missingMaps = useMemo(
+    () => (route ? missingRegionsAlong(route.coordinates) : []),
+    [route, regions],
+  );
+  const edgeGap =
+    driving && located && route ? coverageGapAhead(shownLat, shownLon, route.coordinates) : null;
   const nightLive = driving && located && isNightAt(shownLat, shownLon);
   if (!alongOpen) {
     nightHold.current = nightLive;
@@ -504,6 +520,7 @@ export function MapScreen(_props: Props) {
           after={pair?.after}
           thenWord={copy.thenCue}
           street={roadName || cue.street}
+          night={nightMap}
         />
       ) : null}
       <StatusIcons
@@ -584,7 +601,39 @@ export function MapScreen(_props: Props) {
           setZoomToken(token => token + 1);
         }}
       />
-      {driving ? <TripReadout speedMps={speedMps} limitKmh={limitKmh} /> : null}
+      {driving ? <TripReadout speedMps={speedMps} limitKmh={limitKmh} night={nightMap} cameraM={cameraM} /> : null}
+      {!driving && route && missingMaps.length > 0 ? (
+        <View style={styles.needBanner}>
+          <Text style={styles.needTitle}>{copy.mapsNeed}</Text>
+          <Text style={styles.needBody}>
+            {`${formatRegionList(missingMaps.map(item => item.name), resolveLanguage(language))}. ${copy.mapsNeedBody}`}
+          </Text>
+          <View style={styles.needRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                missingMaps.forEach(region => {
+                  downloadRegion(region).catch(() => undefined);
+                });
+              }}
+              style={styles.needAction}>
+              <Text style={styles.needActionText}>{copy.mapsNeedAction}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('Maps', {need: missingMaps.map(item => item.id)})}>
+              <Text style={styles.needLink}>{copy.maps}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+      {driving && edgeGap ? (
+        <View style={styles.edgeBanner} pointerEvents="none">
+          <Text style={styles.edgeText}>
+            {`${copy.mapsEdge}${edgeGap.region ? ` · ${edgeGap.region.name}` : ''}`}
+          </Text>
+        </View>
+      ) : null}
       {coachVisible ? (
         <MapCoach
           language={language}
@@ -747,6 +796,41 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pickHintText: {color: '#FFFFFF', fontWeight: '700', fontSize: 13},
+  needBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 78,
+    top: 54,
+    zIndex: 6,
+    backgroundColor: '#1C1430',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  needTitle: {...type.bodyStrong, color: '#FFFFFF'},
+  needBody: {...type.caption, color: '#F3F0FA'},
+  needRow: {flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 4},
+  needAction: {
+    backgroundColor: '#149C96',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  needActionText: {color: '#FFFFFF', fontWeight: '700', fontSize: 13},
+  needLink: {color: '#C8C0DC', fontWeight: '600', fontSize: 13},
+  edgeBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 88,
+    top: 118,
+    zIndex: 6,
+    backgroundColor: '#1C1430',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  edgeText: {...type.caption, color: '#FFFFFF', fontWeight: '700'},
 });
 
 function roadSummary(route: RoutePlan, generic: string): string {

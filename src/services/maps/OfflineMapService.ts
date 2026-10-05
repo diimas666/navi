@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 
 import {REGIONS, VECTOR_STYLE_URL, type RegionDefinition} from '../../constants/map';
+import {regionIsStale} from './regionCoverage';
 import {useMapStore, type RegionDownload} from '../../store/mapStore';
 import {tripText} from '../../i18n/tripCopy';
 import {uiCopy} from '../../i18n/uiCopy';
@@ -18,8 +19,8 @@ import {
   pauseDownloads,
   throwIfPaused,
 } from './downloadPause';
-import {downloadRegionHouses, forgetRegionHouses, housesAreComplete} from './houseDownload';
-import {fetchRegionRoads, saveRegionRoads, streetsAreComplete} from '../roads/RegionRoads';
+import {downloadRegionHouses, forgetRegionHouses, housesAreComplete, reopenHouseDownload} from './houseDownload';
+import {fetchRegionRoads, reopenStreetDownload, saveRegionRoads, streetsAreComplete} from '../roads/RegionRoads';
 import {routingGraph} from '../roads/RegionGraph';
 
 const KEY = 'neiv.regions.v1';
@@ -52,7 +53,7 @@ export async function persistRegionState(): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(useMapStore.getState().regions));
 }
 
-export async function downloadRegion(region: RegionDefinition): Promise<void> {
+export async function downloadRegion(region: RegionDefinition, options?: {refresh?: boolean}): Promise<void> {
   if (runningDownloads.has(region.id)) {
     if (!downloadStalled()) {
       return;
@@ -68,14 +69,26 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
   const stamp = downloadGeneration();
   noteDownloadPulse();
   const existing = useMapStore.getState().regions[region.id];
-  const hasPack = Boolean(existing?.packId);
+  if (options?.refresh) {
+    await reopenHouseDownload(region.id);
+    await reopenStreetDownload(region.id);
+    if (existing?.packId) {
+      try {
+        await OfflineManager.deletePack(existing.packId);
+      } catch {
+        // The next pack create fills the tiles again.
+      }
+    }
+  }
+  const hasPack = Boolean(existing?.packId) && !options?.refresh;
   useMapStore.getState().patchRegion(region.id, {
     status: 'downloading',
     progress: hasPack ? 0.68 : 0.02,
     error: null,
+    detail: options?.refresh ? uiCopy(useSettingsStore.getState().language).mapsUpdating : null,
   });
   try {
-    let packId = existing?.packId ?? null;
+    let packId = options?.refresh ? null : existing?.packId ?? null;
     if (!packId) {
       const pack = await OfflineManager.createPack(
         {
@@ -150,6 +163,7 @@ export async function downloadRegion(region: RegionDefinition): Promise<void> {
       packId,
       detail: null,
       error: clipped ? null : tripText().roadsMissing,
+      updatedAt: Date.now(),
     });
     await persistRegionState();
   } catch (error) {
@@ -186,6 +200,7 @@ export async function removeRegion(regionId: string): Promise<void> {
     packId: null,
     error: null,
     detail: null,
+    updatedAt: null,
   });
   await saveRegionRoads(regionId, null);
   await forgetRegionHouses(regionId);
@@ -226,4 +241,33 @@ export function regionById(id: string): RegionDefinition | undefined {
 export function downloadedRegionCount(): number {
   return Object.values(useMapStore.getState().regions).filter(item => item.status === 'downloaded')
     .length;
+}
+
+export {regionIsStale};
+
+export async function refreshStaleRegions(): Promise<void> {
+  const link = await NetInfo.fetch();
+  if (link.isConnected === false || link.isInternetReachable === false) {
+    return;
+  }
+  const now = Date.now();
+  for (const region of REGIONS) {
+    const state = useMapStore.getState().regions[region.id];
+    if (state?.status !== 'downloaded') {
+      continue;
+    }
+    if (state.updatedAt == null) {
+      useMapStore.getState().patchRegion(region.id, {updatedAt: now});
+      await persistRegionState();
+      continue;
+    }
+    if (!regionIsStale(state.updatedAt, now)) {
+      continue;
+    }
+    try {
+      await downloadRegion(region, {refresh: true});
+    } catch {
+      // The saved map stays. The next launch can try again.
+    }
+  }
 }

@@ -52,6 +52,7 @@ export async function loadSettings(): Promise<Partial<PersistedSettings>> {
   if (record.coachSeen) {
     record.mapCoach = false;
   }
+  record.unit = 'kmh';
   return record;
 }
 

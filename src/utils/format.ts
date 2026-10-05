@@ -5,17 +5,11 @@ function appLocale(): string {
   return resolveLanguage(useSettingsStore.getState().language) === 'ru' ? 'ru-RU' : 'uk-UA';
 }
 
-export function formatSpeed(metersPerSecond: number, unit: 'kmh' | 'mph'): string {
-  if (unit === 'mph') {
-    return `${Math.round(metersPerSecond * 2.23694)}`;
-  }
+export function formatSpeed(metersPerSecond: number): string {
   return `${Math.round(metersPerSecond * 3.6)}`;
 }
 
-export function speedUnitLabel(unit: 'kmh' | 'mph'): string {
-  if (unit === 'mph') {
-    return 'mph';
-  }
+export function speedUnitLabel(): string {
   return resolveLanguage(useSettingsStore.getState().language) === 'ru' ? 'км/ч' : 'км/год';
 }
 

@@ -37,6 +37,15 @@ export async function housesAreComplete(regionId: string): Promise<boolean> {
   return manifest[regionId]?.complete === true;
 }
 
+export async function reopenHouseDownload(regionId: string): Promise<void> {
+  const manifest = await readManifest();
+  if (!manifest[regionId]) {
+    return;
+  }
+  manifest[regionId] = {tiles: [], complete: false};
+  await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
+}
+
 export async function loadAllHouses(): Promise<void> {
   const manifest = await readManifest();
   const loaded: HousePoint[] = [];

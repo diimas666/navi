@@ -260,10 +260,6 @@ export function SettingsScreen({navigation}: Props) {
             trailing={<Text style={styles.chevron}>›</Text>}
           />
           <SettingsRow
-            title={settings.unit === 'kmh' ? t.unitKmh : t.unitMph}
-            onPress={() => settings.setUnit(settings.unit === 'kmh' ? 'mph' : 'kmh')}
-          />
-          <SettingsRow
             title={t.theme}
             trailing={<Text style={styles.link}>{themeLabel(t, settings.theme)}</Text>}
             onPress={() => setThemeOpen(true)}

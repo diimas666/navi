@@ -7,6 +7,7 @@ export type RegionDownload = {
   packId: string | null;
   error: string | null;
   detail: string | null;
+  updatedAt: number | null;
 };
 
 type MapState = {
@@ -25,6 +26,7 @@ const empty = (id: string): RegionDownload => ({
   packId: null,
   error: null,
   detail: null,
+  updatedAt: null,
 });
 
 export const useMapStore = create<MapState>(set => ({
@@ -39,5 +41,10 @@ export const useMapStore = create<MapState>(set => ({
         [id]: {...(state.regions[id] ?? empty(id)), ...patch},
       },
     })),
-  hydrateRegions: regions => set({regions}),
+  hydrateRegions: regions =>
+    set({
+      regions: Object.fromEntries(
+        Object.entries(regions).map(([id, region]) => [id, {...empty(id), ...region}]),
+      ),
+    }),
 }));

@@ -47,6 +47,15 @@ export async function streetsAreComplete(regionId: string): Promise<boolean> {
   return manifest[regionId]?.complete === true;
 }
 
+export async function reopenStreetDownload(regionId: string): Promise<void> {
+  const manifest = await readRoadManifest();
+  if (!manifest[regionId]) {
+    return;
+  }
+  manifest[regionId] = {tiles: [], complete: false};
+  await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
+}
+
 export async function loadRegionRoads(): Promise<void> {
   const stored = await readRoads();
   const tiles = await readTileNetworks();

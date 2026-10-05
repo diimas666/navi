@@ -366,11 +366,14 @@ export function NaviMap({
     let south = 90;
     let east = -180;
     let north = -90;
-    route.coordinates.forEach(([pointLon, pointLat]) => {
-      west = Math.min(west, pointLon);
-      south = Math.min(south, pointLat);
-      east = Math.max(east, pointLon);
-      north = Math.max(north, pointLat);
+    const lines = [route.coordinates, ...otherRoutes.map(item => item.coordinates)];
+    lines.forEach(line => {
+      line.forEach(([pointLon, pointLat]) => {
+        west = Math.min(west, pointLon);
+        south = Math.min(south, pointLat);
+        east = Math.max(east, pointLon);
+        north = Math.max(north, pointLat);
+      });
     });
     try {
       settleCamera(
@@ -383,7 +386,7 @@ export function NaviMap({
     } catch {
       // The native camera view can still be mounting.
     }
-  }, [fitToken, mapReady, route, tracking]);
+  }, [fitToken, mapReady, otherRoutes, route, tracking]);
 
   useEffect(() => {
     if (!mapReady || !follow) {

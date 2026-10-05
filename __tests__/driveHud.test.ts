@@ -3,6 +3,7 @@ import {rankAlong, sampleAlong} from '../src/services/navigation/alongRoute';
 import {joinPlans} from '../src/services/navigation/joinPlans';
 import {nextCues} from '../src/services/navigation/maneuver';
 import {isNightAt} from '../src/services/maps/sun';
+import {cameraAheadMeters} from '../src/services/maps/speedCameras';
 import type {AlongPlace} from '../src/services/navigation/alongRoute';
 import type {RoutePlan} from '../src/models/domain';
 
@@ -129,6 +130,10 @@ test('a roundabout keeps the exit number', () => {
   };
   const pair = nextCues(route, 46.48, 30.72, 'uk');
   expect(pair.current.title).toContain('2-й');
+});
+
+test('a camera far behind the car is ignored', () => {
+  expect(cameraAheadMeters(1, 1, 90)).toBeNull();
 });
 
 test('Odesa in January night is dark, noon in June is not', () => {

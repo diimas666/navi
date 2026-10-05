@@ -17,6 +17,7 @@ import UIKit
   @objc public var onSnapshot: ((NSDictionary) -> Void)?
   @objc public var onSessionError: ((NSDictionary) -> Void)?
   private let speaker = AVSpeechSynthesizer()
+  private var backgroundTask = UIBackgroundTaskIdentifier.invalid
 
   @objc public func speak(_ phrase: String, language: String) {
     let utterance = AVSpeechUtterance(string: phrase)
@@ -28,6 +29,30 @@ import UIKit
 
   @objc public func stopSpeaking() {
     speaker.stopSpeaking(at: .immediate)
+  }
+
+  @objc public func clipboardText(_ completion: @escaping (String) -> Void) {
+    DispatchQueue.main.async {
+      completion(UIPasteboard.general.string ?? "")
+    }
+  }
+
+  @objc public func beginBackgroundWork() {
+    DispatchQueue.main.async {
+      self.endBackgroundWork()
+      self.backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "neiv-download") {
+        self.endBackgroundWork()
+      }
+    }
+  }
+
+  @objc public func endBackgroundWork() {
+    DispatchQueue.main.async {
+      if self.backgroundTask != .invalid {
+        UIApplication.shared.endBackgroundTask(self.backgroundTask)
+        self.backgroundTask = .invalid
+      }
+    }
   }
 
   @objc public func startPreview() {

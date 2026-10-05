@@ -6,17 +6,16 @@ import {formatSpeed, speedUnitLabel} from '../utils/format';
 
 type Props = {
   metersPerSecond: number | null;
-  unit: 'kmh' | 'mph';
 };
 
-export function SpeedCard({metersPerSecond, unit}: Props) {
+export function SpeedCard({metersPerSecond}: Props) {
   const {colors} = useTheme();
   return (
     <View>
       <Text style={[type.speed, {color: colors.textPrimary}]}>
-        {metersPerSecond == null ? '—' : formatSpeed(metersPerSecond, unit)}
+        {metersPerSecond == null ? '—' : formatSpeed(metersPerSecond)}
       </Text>
-      <Text style={[type.caption, {color: colors.textSecondary}]}>{speedUnitLabel(unit)}</Text>
+      <Text style={[type.caption, {color: colors.textSecondary}]}>{speedUnitLabel()}</Text>
     </View>
   );
 }

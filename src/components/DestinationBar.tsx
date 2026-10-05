@@ -19,10 +19,13 @@ import NativeTripSession from '../native/NativeTripSession';
 import {useSettingsStore} from '../store/settingsStore';
 import {googleSearchOn, suggestPlaces, suggestPlacesNow} from '../services/maps/Geocoder';
 import {googleResolve, hasCoordinates} from '../services/maps/googlePlaces';
+import {placeFromClipboard} from '../services/maps/clipboardPlace';
+import {searchEmptyHint, searchLiveHint, searchScope} from '../services/maps/searchScope';
 import {asPlace, matchesHistory, type HistoryPlace} from '../services/search/searchHistory';
 import {useSearchHistoryStore} from '../store/searchHistoryStore';
 import {dictate, stopDictation} from '../services/navigation/dictate';
 import {stopManeuverSpeech} from '../services/navigation/speakCue';
+import {useMapStore} from '../store/mapStore';
 import {useSessionStore} from '../store/sessionStore';
 import {useUiStore} from '../store/uiStore';
 import {useTheme} from '../theme/ThemeProvider';
@@ -61,6 +64,7 @@ export function DestinationBar({
   const [listening, setListening] = useState(false);
   const [open, setOpen] = useState(false);
   const [keyboard, setKeyboard] = useState(0);
+  const [clip, setClip] = useState<Place | null>(null);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const asked = useRef('');
   const listenToken = useRef(0);
@@ -104,9 +108,16 @@ export function DestinationBar({
   const here = latitude != null && longitude != null ? {latitude, longitude} : null;
   const shownRecents = recents.filter(item => matchesHistory(item, query));
 
+  const adoptClipboard = (value: string) => {
+    const place = placeFromClipboard(value);
+    setClip(place);
+    return place;
+  };
+
   const lookup = (value: string) => {
     asked.current = value;
     setQuery(value);
+    adoptClipboard(value);
     const typed = value.trim().length >= 2;
     if (!typed) {
       setResults([]);
@@ -175,10 +186,15 @@ export function DestinationBar({
 
   const choose = (place: Place) => {
     Keyboard.dismiss();
+    if (place.kind === 'clipboard' && !hasCoordinates(place)) {
+      lookup(place.name);
+      return;
+    }
     // The street name appears in the bar at once. The route follows when the point arrives.
     setQuery(place.name);
     setResults([]);
     setEmpty(false);
+    setClip(null);
     setOpen(false);
     onSearchClose();
     chooseToken.current += 1;
@@ -203,6 +219,13 @@ export function DestinationBar({
   const openSearch = () => {
     setOpen(true);
     onFocus();
+    NativeTripSession?.clipboardText?.()
+      ?.then(text => {
+        if (text) {
+          adoptClipboard(text);
+        }
+      })
+      .catch(() => undefined);
   };
 
   const closeSearch = () => {
@@ -210,6 +233,7 @@ export function DestinationBar({
     setOpen(false);
     setResults([]);
     setEmpty(false);
+    setClip(null);
     onSearchClose();
   };
 
@@ -271,6 +295,7 @@ export function DestinationBar({
         query={query}
         results={results}
         recents={shownRecents}
+        clip={clip}
         empty={empty}
         listening={listening}
         keyboard={keyboard}
@@ -292,6 +317,7 @@ function SearchSheet({
   query,
   results,
   recents,
+  clip,
   empty,
   listening,
   keyboard,
@@ -308,6 +334,7 @@ function SearchSheet({
   query: string;
   results: Place[];
   recents: HistoryPlace[];
+  clip: Place | null;
   empty: boolean;
   listening: boolean;
   keyboard: number;
@@ -322,7 +349,17 @@ function SearchSheet({
 }) {
   const {colors} = useTheme();
   const copy = uiCopy(useSettingsStore(state => state.language));
+  const online = useMapStore(state => state.online);
+  const regions = useMapStore(state => state.regions);
+  const scope = searchScope(here?.latitude ?? null, here?.longitude ?? null, online);
+  const liveHint = searchLiveHint(scope, copy);
+  const emptyHint = searchEmptyHint(scope, copy);
   const room = Math.max(220, screenHeight - keyboard - Math.max(topInset, 12) - 8);
+  const clipShown =
+    clip != null &&
+    !results.some(place => sameShownPlace(place, clip)) &&
+    !recents.some(item => sameShown(item, clip));
+  void regions;
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modal}>
@@ -384,10 +421,19 @@ function SearchSheet({
               </Pressable>
             </View>
           </View>
-          {empty && results.length === 0 && recents.length === 0 ? (
-            <Text style={[type.caption, {color: colors.textSecondary}]}>{copy.searchEmpty}</Text>
+          {liveHint ? (
+            <Text style={[type.caption, {color: colors.textSecondary}]}>{liveHint}</Text>
+          ) : null}
+          {empty && results.length === 0 && recents.length === 0 && !clipShown ? (
+            <Text style={[type.caption, {color: colors.textSecondary}]}>{emptyHint}</Text>
           ) : null}
           <ScrollView keyboardShouldPersistTaps="always" style={styles.results} contentContainerStyle={styles.resultsContent}>
+            {clipShown && clip ? (
+              <>
+                <Text style={[type.caption, styles.recentLabel, {color: colors.textSecondary}]}>{copy.clipboardJust}</Text>
+                <HistoryRow place={clip} here={here} onChoose={onChoose} />
+              </>
+            ) : null}
             {recents.length > 0 ? (
               <Text style={[type.caption, styles.recentLabel, {color: colors.textSecondary}]}>{copy.recentSearches}</Text>
             ) : null}
@@ -454,6 +500,16 @@ function sameShown(item: HistoryPlace, place: Place): boolean {
     return item.name.trim().toLowerCase() === place.name.trim().toLowerCase();
   }
   return haversineMeters(item.latitude, item.longitude, place.latitude, place.longitude) < 40;
+}
+
+function sameShownPlace(left: Place, right: Place): boolean {
+  if (left.id === right.id) {
+    return true;
+  }
+  if (!hasCoordinates(left) || !hasCoordinates(right)) {
+    return left.name.trim().toLowerCase() === right.name.trim().toLowerCase();
+  }
+  return haversineMeters(left.latitude, left.longitude, right.latitude, right.longitude) < 40;
 }
 
 function SearchGlyph({color}: {color: string}) {

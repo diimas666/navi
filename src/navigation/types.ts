@@ -4,7 +4,7 @@ export type RootStackParamList = {
   Permissions: undefined;
   Home: undefined;
   Main: {screen?: keyof MainTabParamList} | undefined;
-  Maps: undefined;
+  Maps: {need?: string[]} | undefined;
   Route: undefined;
   OBD: undefined;
   Adapters: undefined;

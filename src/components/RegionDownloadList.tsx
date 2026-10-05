@@ -5,6 +5,8 @@ import {REGIONS} from '../constants/map';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {toAppError} from '../services/errors/AppError';
 import {downloadRegion, removeRegion} from '../services/maps/OfflineMapService';
+import {regionIsStale} from '../services/maps/regionCoverage';
+import {uiCopy} from '../i18n/uiCopy';
 import {useMapStore} from '../store/mapStore';
 import {useSettingsStore} from '../store/settingsStore';
 import {useUiStore} from '../store/uiStore';
@@ -29,19 +31,30 @@ const confirmCopy = {
   },
 };
 
-export function RegionDownloadList() {
+export function RegionDownloadList({need = []}: {need?: string[]}) {
   const {colors} = useTheme();
   const regions = useMapStore(state => state.regions);
   const language = useSettingsStore(state => state.language);
+  const copy = uiCopy(language);
   const text = confirmCopy[resolveLanguage(language)];
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const pending = REGIONS.find(region => region.id === confirmId) ?? null;
+  const wanted = new Set(need);
+  const rows = [...REGIONS].sort((left, right) => {
+    const leftNeed = wanted.has(left.id) ? 0 : 1;
+    const rightNeed = wanted.has(right.id) ? 0 : 1;
+    return leftNeed - rightNeed;
+  });
+  const anyDownloading = Object.values(regions).some(region => region.status === 'downloading');
 
   return (
     <>
+    {anyDownloading ? (
+      <Text style={[type.caption, {color: colors.textSecondary, paddingBottom: 8}]}>{copy.mapsBackground}</Text>
+    ) : null}
     <FlatList
-      data={REGIONS}
+      data={rows}
       keyExtractor={item => item.id}
       style={styles.list}
       contentContainerStyle={styles.content}
@@ -49,6 +62,8 @@ export function RegionDownloadList() {
         const state = regions[item.id];
         const downloaded = state?.status === 'downloaded';
         const downloading = state?.status === 'downloading';
+        const needed = wanted.has(item.id) && !downloaded;
+        const stale = downloaded && regionIsStale(state?.updatedAt);
         const progress = downloading ? Math.max(0.02, Math.min(1, state?.progress ?? 0)) : downloaded ? 1 : 0;
         const percent = Math.round(progress * 100);
         const fill = {
@@ -59,12 +74,14 @@ export function RegionDownloadList() {
           ? {backgroundColor: colors.surfaceMuted}
           : {backgroundColor: colors.accentSoft};
         return (
-          <View style={[styles.card, {backgroundColor: colors.surface}]}>
+          <View style={[styles.card, {backgroundColor: colors.surface, borderColor: needed ? colors.accent : 'transparent', borderWidth: needed ? 1 : 0}]}>
             <View style={styles.copy}>
               <Text style={[type.bodyStrong, {color: colors.textPrimary}]}>{item.name}</Text>
               <Text style={[type.caption, {color: colors.textSecondary}]}>
                 {item.sizeMb} МБ
                 {downloaded ? ' · на телефоні' : ''}
+                {needed ? ` · ${copy.mapsNeed}` : ''}
+                {stale ? ` · ${copy.mapsStale}` : ''}
                 {downloading ? ` · ${state?.detail ?? `${percent}%`}` : ''}
                 {state?.error ? ` · ${state.error}` : ''}
               </Text>
@@ -79,17 +96,17 @@ export function RegionDownloadList() {
               accessibilityLabel={downloaded ? text.confirm : text.download}
               disabled={busy === item.id}
               onPress={() => {
-                if (downloaded) {
+                if (downloaded && !stale) {
                   setConfirmId(item.id);
                   return;
                 }
                 setBusy(item.id);
-                downloadRegion(item)
+                downloadRegion(item, stale ? {refresh: true} : undefined)
                   .catch(error => useUiStore.getState().showToast(toAppError(error, 'OFFLINE_MAP_ERROR').userMessage))
                   .finally(() => setBusy(null));
               }}
               style={[downloaded ? styles.close : styles.action, actionStyle]}>
-              {downloaded ? <CloseGlyph color={colors.textSecondary} /> : <DownloadGlyph color={colors.accent} />}
+              {downloaded && !stale ? <CloseGlyph color={colors.textSecondary} /> : <DownloadGlyph color={colors.accent} />}
             </Pressable>
           </View>
         );

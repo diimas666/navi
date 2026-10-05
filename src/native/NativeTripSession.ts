@@ -45,6 +45,9 @@ export interface Spec extends TurboModule {
   resetEstimator(): void;
   speak(phrase: string, language: string): void;
   stopSpeaking(): void;
+  clipboardText(): Promise<string>;
+  beginBackgroundWork(): void;
+  endBackgroundWork(): void;
   readonly onSnapshot: EventEmitter<NativeSnapshot>;
   readonly onSessionError: EventEmitter<NativeSessionError>;
 }

@@ -8,22 +8,25 @@ type Props = {
   after?: ManeuverCue | null;
   thenWord: string;
   street?: string;
+  night?: boolean;
 };
 
-export function ManeuverBanner({current, after, thenWord, street}: Props) {
+export function ManeuverBanner({current, after, thenWord, street, night = false}: Props) {
   const road = street && street !== current.street ? street : '';
+  const ink = night ? '#F4F0FF' : '#1C1430';
+  const muted = night ? '#B8B0C8' : '#6E657F';
   return (
-    <View style={styles.card}>
-      {current.lanes.length > 1 ? <LaneRow lanes={current.lanes} /> : null}
+    <View style={[styles.card, night ? styles.cardNight : null]}>
+      {current.lanes.length > 1 ? <LaneRow lanes={current.lanes} night={night} /> : null}
       <View style={styles.row}>
-        <TurnArrow turn={current.turn} large />
-        <Text style={styles.meters}>{formatMeters(current.meters)}</Text>
+        <TurnArrow turn={current.turn} large night={night} />
+        <Text style={[styles.meters, {color: ink}]}>{formatMeters(current.meters)}</Text>
         <View style={styles.copy}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, {color: ink}]} numberOfLines={1}>
             {current.title}
           </Text>
           {road ? (
-            <Text style={styles.street} numberOfLines={1}>
+            <Text style={[styles.street, {color: muted}]} numberOfLines={1}>
               {road}
             </Text>
           ) : null}
@@ -31,8 +34,8 @@ export function ManeuverBanner({current, after, thenWord, street}: Props) {
       </View>
       {after && after.turn !== 'arrive' ? (
         <View style={styles.after}>
-          <TurnArrow turn={after.turn} />
-          <Text style={styles.afterText} numberOfLines={1}>
+          <TurnArrow turn={after.turn} night={night} />
+          <Text style={[styles.afterText, {color: muted}]} numberOfLines={1}>
             {`${thenWord} ${after.title}`}
           </Text>
         </View>
@@ -62,25 +65,32 @@ function arrowRotation(turn: ManeuverTurn): string {
   return '0deg';
 }
 
-function TurnArrow({turn, large = false}: {turn: ManeuverTurn; large?: boolean}) {
+function TurnArrow({turn, large = false, night = false}: {turn: ManeuverTurn; large?: boolean; night?: boolean}) {
   const rotation = arrowRotation(turn);
+  const mark = night ? '#5EE0D6' : '#149C96';
   if (turn === 'arrive') {
-    return <View style={[styles.arrive, large ? styles.arriveLarge : null]} />;
+    return <View style={[styles.arrive, large ? styles.arriveLarge : null, {backgroundColor: mark}]} />;
   }
   return (
     <View style={[styles.arrowBox, large ? styles.arrowBoxLarge : null, {transform: [{rotate: rotation}]}]}>
-      <View style={[styles.arrowHead, large ? styles.arrowHeadLarge : null]} />
-      <View style={[styles.arrowShaft, large ? styles.arrowShaftLarge : null]} />
+      <View style={[styles.arrowHead, large ? styles.arrowHeadLarge : null, {borderBottomColor: mark}]} />
+      <View style={[styles.arrowShaft, large ? styles.arrowShaftLarge : null, {backgroundColor: mark}]} />
     </View>
   );
 }
 
-function LaneRow({lanes}: {lanes: LaneHint[]}) {
+function LaneRow({lanes, night = false}: {lanes: LaneHint[]; night?: boolean}) {
   return (
     <View style={styles.lanes}>
       {lanes.map((lane, index) => (
-        <View key={`${lane.indication}-${index}`} style={[styles.lane, lane.valid ? styles.laneOn : null]}>
-          <TurnArrow turn={lane.indication === 'uturn' ? 'uturn' : lane.indication} />
+        <View
+          key={`${lane.indication}-${index}`}
+          style={[
+            styles.lane,
+            night ? styles.laneNight : null,
+            lane.valid ? (night ? styles.laneOnNight : styles.laneOn) : null,
+          ]}>
+          <TurnArrow turn={lane.indication === 'uturn' ? 'uturn' : lane.indication} night={night} />
         </View>
       ))}
     </View>
@@ -103,6 +113,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: {width: 0, height: 4},
   },
+  cardNight: {backgroundColor: '#1C1826', shadowOpacity: 0.28},
   row: {flexDirection: 'row', alignItems: 'center', gap: 10},
   copy: {flex: 1, gap: 1},
   meters: {color: '#1C1430', fontSize: 26, fontWeight: '800'},
@@ -121,7 +132,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  laneNight: {backgroundColor: '#2A2438'},
   laneOn: {borderColor: '#149C96', backgroundColor: '#E7F7F5'},
+  laneOnNight: {borderColor: '#5EE0D6', backgroundColor: '#24343A'},
   arrowBox: {width: 16, height: 16, alignItems: 'center'},
   arrowBoxLarge: {width: 22, height: 22},
   arrowHead: {

@@ -8,7 +8,7 @@ import NativeLocationManager from '../native/NativeLocationManager';
 import NativeOBDManager from '../native/NativeOBDManager';
 import NativeTripSession from '../native/NativeTripSession';
 import {syncDrAllowance} from '../services/entitlements/EntitlementService';
-import {loadRegionState, completeMissingHouses, releaseRegionDownloads} from '../services/maps/OfflineMapService';
+import {loadRegionState, completeMissingHouses, refreshStaleRegions, releaseRegionDownloads} from '../services/maps/OfflineMapService';
 import {clearDownloadPause, downloadStalled, pauseDownloads} from '../services/maps/downloadPause';
 import {loadRegionRoads} from '../services/roads/RegionRoads';
 import {loadAllHouses} from '../services/maps/houseDownload';
@@ -93,7 +93,9 @@ export function useAppServices(): void {
       pauseDownloads();
       releaseRegionDownloads();
       clearDownloadPause();
-      completeMissingHouses().catch(() => undefined);
+      completeMissingHouses()
+        .then(() => refreshStaleRegions())
+        .catch(() => undefined);
     };
     boot().catch(() => {
       useSettingsStore.getState().setHydrated(true);
@@ -121,17 +123,21 @@ export function useAppServices(): void {
     };
     const appSub = AppState.addEventListener('change', next => {
       if (next === 'background') {
-        pauseDownloads();
-        releaseRegionDownloads();
+        NativeTripSession?.beginBackgroundWork?.();
         return;
       }
-      if (next === 'active' && downloadStalled()) {
-        pauseDownloads();
-        releaseRegionDownloads();
-        clearDownloadPause();
-        setTimeout(() => {
-          completeMissingHouses().catch(() => undefined);
-        }, 600);
+      if (next === 'active') {
+        NativeTripSession?.endBackgroundWork?.();
+        if (downloadStalled()) {
+          pauseDownloads();
+          releaseRegionDownloads();
+          clearDownloadPause();
+          setTimeout(() => {
+            completeMissingHouses()
+              .then(() => refreshStaleRegions())
+              .catch(() => undefined);
+          }, 600);
+        }
       }
     });
     const netSub = NetInfo.addEventListener(applyLink);
@@ -168,7 +174,9 @@ export function useAppServices(): void {
       pauseDownloads();
       releaseRegionDownloads();
       clearDownloadPause();
-      completeMissingHouses().catch(() => undefined);
+      completeMissingHouses()
+        .then(() => refreshStaleRegions())
+        .catch(() => undefined);
     }, 20_000);
     const obd = NativeOBDManager;
     const deviceSub = obd?.onDevice(device => useObdStore.getState().upsertDevice(device));

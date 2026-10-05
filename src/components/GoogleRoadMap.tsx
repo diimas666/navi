@@ -439,9 +439,13 @@ function initMap(){
       });
     },
     fit: function(){
-      if (path.length < 2) return;
       var bounds = new google.maps.LatLngBounds();
-      path.forEach(function(point){ bounds.extend({lat: point[1], lng: point[0]}); });
+      var used = false;
+      path.forEach(function(point){ used = true; bounds.extend({lat: point[1], lng: point[0]}); });
+      altLines.forEach(function(line){
+        line.getPath().forEach(function(point){ used = true; bounds.extend(point); });
+      });
+      if (!used) return;
       map.fitBounds(bounds, {top: 120, right: 48, bottom: 280, left: 48});
     },
     places: function(on, dark){

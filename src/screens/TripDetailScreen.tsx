@@ -19,7 +19,6 @@ export function TripDetailScreen({route}: Props) {
   const {colors} = useTheme();
   const stored = useTripStore(state => state.trips.find(item => item.id === route.params.tripId));
   const copy = uiCopy(useSettingsStore(state => state.language));
-  const unit = useSettingsStore(state => state.unit);
   const zoomRef = useRef(13);
   if (!stored) {
     return (
@@ -65,7 +64,7 @@ export function TripDetailScreen({route}: Props) {
             <Text style={[type.headline, {color: colors.textPrimary}]}>{formatDistance(trip.distanceM)}</Text>
             <Text style={[type.body, {color: colors.textPrimary}]}>{when}</Text>
             <Text style={[type.caption, {color: colors.textSecondary}]}>
-              {`${formatTravel(trip.durationS, copy.hours, copy.minutes)} · ${copy.maxSpeed} ${formatSpeed(trip.maxSpeedMps, unit)} ${speedUnitLabel(unit)}`}
+              {`${formatTravel(trip.durationS, copy.hours, copy.minutes)} · ${copy.maxSpeed} ${formatSpeed(trip.maxSpeedMps)} ${speedUnitLabel()}`}
             </Text>
             <PlaceRow mark={copy.tripFrom} name={trip.fromName || copy.mapPoint} ink={colors.textPrimary} accent={colors.accent} />
             <Text style={[type.caption, {color: colors.textMuted}]}>{copy.tripRoads}</Text>

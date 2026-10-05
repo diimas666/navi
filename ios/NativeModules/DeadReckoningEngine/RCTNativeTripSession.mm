@@ -64,4 +64,18 @@
   [TripSession.shared stopSpeaking];
 }
 
+- (void)clipboardText:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+  [TripSession.shared clipboardText:^(NSString *text) {
+    resolve(text);
+  }];
+}
+
+- (void)beginBackgroundWork {
+  [TripSession.shared beginBackgroundWork];
+}
+
+- (void)endBackgroundWork {
+  [TripSession.shared endBackgroundWork];
+}
+
 @end
