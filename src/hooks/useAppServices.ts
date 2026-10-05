@@ -1,4 +1,5 @@
 import {useEffect, useRef} from 'react';
+import {useIncomingNavLink} from './useIncomingNavLink';
 import {AppState} from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -45,6 +46,7 @@ let parkMemory: ParkMemory = {stillSince: 0, anchorLatitude: null, anchorLongitu
 
 export function useAppServices(): void {
   const hydrated = useRef(false);
+  useIncomingNavLink();
 
   useEffect(() => {
     let alive = true;

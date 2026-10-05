@@ -22,6 +22,7 @@ import {resolveLanguage} from '../i18n/settingsCopy';
 import {uiCopy} from '../i18n/uiCopy';
 import {openAdapterSetup} from '../navigation/navigationRef';
 import type {MainTabParamList} from '../navigation/types';
+import {useLinkStore} from '../store/linkStore';
 import {useMapStore} from '../store/mapStore';
 import {useObdStore} from '../store/obdStore';
 import {useSessionStore} from '../store/sessionStore';
@@ -70,6 +71,7 @@ export function MapScreen(_props: Props) {
   const [headingUp, setHeadingUp] = useState(true);
   const [buildings3d, setBuildings3d] = useState(false);
   const [fitToken, setFitToken] = useState(0);
+  const incomingToken = useLinkStore(state => state.token);
   const movedAt = useRef(0);
   const touching = useRef(false);
   const turnRate = useRef(0);
@@ -211,6 +213,15 @@ export function MapScreen(_props: Props) {
       })
       .catch(() => undefined);
   };
+
+  useEffect(() => {
+    const place = useLinkStore.getState().pending;
+    if (!place) {
+      return;
+    }
+    useLinkStore.getState().clear();
+    previewRoute(place);
+  }, [incomingToken]);
 
   const depart = () => {
     confirmTrip().catch(() => undefined);

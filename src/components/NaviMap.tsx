@@ -14,7 +14,7 @@ import {GOOGLE_MAPS_KEY} from '../constants/googleMapsKey';
 import {DARK_STYLE_URL, VECTOR_STYLE_URL} from '../constants/map';
 import {GoogleRoadMap, googleWebViewReady} from './GoogleRoadMap';
 import {loadBasemapStyle} from '../services/maps/basemapStyle';
-import {cityDistrictFeatures, districtFeatures} from '../services/maps/districts';
+import {cityDistrictLabels, districtLabels} from '../services/maps/districts';
 import {
   fetchNearbyPlaces,
   fetchPlaceHours,
@@ -133,6 +133,7 @@ export function NaviMap({
   const pitchArmed = useRef(false);
   const lastPinned = useRef(false);
   const [frameHeight, setFrameHeight] = useState(0);
+  const [frameWidth, setFrameWidth] = useState(0);
   const [mapReady, setMapReady] = useState(false);
   const pitched = Boolean(buildings3d && tracking);
   const streetLabels = mode === 'dark' ? 'highway_name_other' : 'highway-name-path';
@@ -222,8 +223,31 @@ export function NaviMap({
     setPicked(place);
   };
 
-  const districts = useMemo(() => districtFeatures(), []);
-  const cityDistricts = useMemo(() => cityDistrictFeatures(), []);
+  const cityMarks = useMemo(() => cityDistrictLabels(), []);
+  const hoodMarks = useMemo(() => districtLabels(), []);
+  const areaZoom = look.zoom;
+  const showAreaNames = !tracking && !pitched && Math.abs(course) < 15;
+  const visibleCityDistricts = useMemo(() => {
+    if (!showAreaNames || areaZoom < 8.8 || areaZoom > 15.8) {
+      return [];
+    }
+    return cityMarks.filter(
+      item => haversineMeters(look.latitude, look.longitude, item.lat, item.lon) < 32000,
+    );
+  }, [areaZoom, cityMarks, look.latitude, look.longitude, showAreaNames]);
+  const visibleHoods = useMemo(() => {
+    if (!showAreaNames || areaZoom < 12.3 || areaZoom > 16.9) {
+      return [];
+    }
+    return hoodMarks
+      .map(item => ({
+        ...item,
+        away: haversineMeters(look.latitude, look.longitude, item.lat, item.lon),
+      }))
+      .filter(item => item.away < 9000)
+      .sort((left, right) => left.away - right.away)
+      .slice(0, 28);
+  }, [areaZoom, hoodMarks, look.latitude, look.longitude, showAreaNames]);
   const streetKey = `${view.latitude.toFixed(3)}:${view.longitude.toFixed(3)}`;
   const localStreets = useMemo(() => {
     const [latText, lonText] = streetKey.split(':');
@@ -411,8 +435,10 @@ export function NaviMap({
     <View
       style={styles.fill}
       onLayout={event => {
-        const next = Math.round(event.nativeEvent.layout.height);
-        setFrameHeight(current => (current === next ? current : next));
+        const nextHeight = Math.round(event.nativeEvent.layout.height);
+        const nextWidth = Math.round(event.nativeEvent.layout.width);
+        setFrameHeight(current => (current === nextHeight ? current : nextHeight));
+        setFrameWidth(current => (current === nextWidth ? current : nextWidth));
       }}>
       <Map
         style={styles.fill}
@@ -460,21 +486,28 @@ export function NaviMap({
             visibleBounds?: Array<[number, number]>;
           };
           const bounds = native.visibleBounds;
-          if (bounds && bounds.length >= 2) {
-            const lon = (bounds[0][0] + bounds[1][0]) / 2;
-            const lat = (bounds[0][1] + bounds[1][1]) / 2;
-            setView(current => {
-              const samePlace = Math.abs(current.latitude - lat) < 0.0015 && Math.abs(current.longitude - lon) < 0.0015;
-              const sameZoom = Math.abs(current.zoom - native.zoom) < 0.25;
-              if (samePlace && sameZoom) {
-                return current;
-              }
-              return {latitude: lat, longitude: lon, zoom: native.zoom};
-            });
-            if (!follow) {
-              setLook({latitude: lat, longitude: lon, zoom: native.zoom});
+          const lon = bounds && bounds.length >= 2 ? (bounds[0][0] + bounds[1][0]) / 2 : view.longitude;
+          const lat = bounds && bounds.length >= 2 ? (bounds[0][1] + bounds[1][1]) / 2 : view.latitude;
+          setView(current => {
+            const samePlace = Math.abs(current.latitude - lat) < 0.0015 && Math.abs(current.longitude - lon) < 0.0015;
+            const sameZoom = Math.abs(current.zoom - native.zoom) < 0.25;
+            if (samePlace && sameZoom) {
+              return current;
             }
-          }
+            return {latitude: lat, longitude: lon, zoom: native.zoom};
+          });
+          setLook(current => {
+            const nextLat = follow ? current.latitude : lat;
+            const nextLon = follow ? current.longitude : lon;
+            if (
+              Math.abs(current.latitude - nextLat) < 0.0008 &&
+              Math.abs(current.longitude - nextLon) < 0.0008 &&
+              Math.abs(current.zoom - native.zoom) < 0.15
+            ) {
+              return current;
+            }
+            return {latitude: nextLat, longitude: nextLon, zoom: native.zoom};
+          });
           if (!native.userInteraction) {
             return;
           }
@@ -538,51 +571,6 @@ export function NaviMap({
                 'text-color': mode === 'dark' ? '#F4F0FF' : '#3A3348',
                 'text-halo-color': mode === 'dark' ? '#1C1430' : '#F7F4EE',
                 'text-halo-width': 1.4,
-              }}
-            />
-          </GeoJSONSource>
-        ) : null}
-        <GeoJSONSource id="city-districts" data={cityDistricts}>
-          <Layer
-            id="city-district-labels"
-            type="symbol"
-            minzoom={9.2}
-            maxzoom={15.2}
-            layout={{
-              'text-field': ['get', 'name'],
-              'text-font': ['Noto Sans Regular'],
-              'text-size': 14,
-              'text-letter-spacing': 0.08,
-              'text-max-width': 7,
-              'text-padding': 6,
-              'text-allow-overlap': false,
-            }}
-            paint={{
-              'text-color': mode === 'dark' ? '#B9B3CC' : '#7E8794',
-              'text-halo-color': mode === 'dark' ? '#1C1430' : '#F7F4EE',
-              'text-halo-width': 1.6,
-            }}
-          />
-        </GeoJSONSource>
-        {districts ? (
-          <GeoJSONSource id="districts" data={districts}>
-            <Layer
-              id="district-labels"
-              type="symbol"
-              minzoom={12}
-              maxzoom={16.4}
-              layout={{
-                'text-field': ['get', 'name'],
-                'text-font': ['Noto Sans Regular'],
-                'text-size': 14,
-                'text-max-width': 10,
-                'text-padding': 8,
-                'text-allow-overlap': false,
-              }}
-              paint={{
-                'text-color': '#6E7680',
-                'text-halo-color': '#F7F4EE',
-                'text-halo-width': 1.6,
               }}
             />
           </GeoJSONSource>
@@ -764,10 +752,18 @@ export function NaviMap({
             onUserMove={onUserMove}
             onGesture={onGesture}
             onLook={(lookLatitude, lookLongitude, lookZoom) => {
-              if (follow) {
-                return;
-              }
-              setLook({latitude: lookLatitude, longitude: lookLongitude, zoom: lookZoom});
+              setLook(current => {
+                const nextLat = follow ? current.latitude : lookLatitude;
+                const nextLon = follow ? current.longitude : lookLongitude;
+                if (
+                  Math.abs(current.latitude - nextLat) < 0.0008 &&
+                  Math.abs(current.longitude - nextLon) < 0.0008 &&
+                  Math.abs(current.zoom - lookZoom) < 0.15
+                ) {
+                  return current;
+                }
+                return {latitude: nextLat, longitude: nextLon, zoom: lookZoom};
+              });
             }}
             onMapPress={(pressLongitude, pressLatitude) => {
               setPicked(null);
@@ -805,8 +801,85 @@ export function NaviMap({
           © OpenStreetMap contributors
         </Text>
       )}
+      {frameWidth > 0 && (visibleCityDistricts.length > 0 || visibleHoods.length > 0) ? (
+        <View pointerEvents="none" style={styles.areaNames}>
+          {visibleCityDistricts.map(item => {
+            const point = projectOnMap(
+              item.lat,
+              item.lon,
+              look.latitude,
+              look.longitude,
+              look.zoom,
+              frameWidth,
+              frame,
+            );
+            if (!point) {
+              return null;
+            }
+            return (
+              <Text
+                key={`city-${item.name}-${item.lat}`}
+                style={[
+                  styles.cityDistrict,
+                  mode === 'dark' ? styles.cityDistrictDark : null,
+                  {left: point.x, top: point.y},
+                ]}>
+                {item.name}
+              </Text>
+            );
+          })}
+          {visibleHoods.map(item => {
+            const point = projectOnMap(
+              item.lat,
+              item.lon,
+              look.latitude,
+              look.longitude,
+              look.zoom,
+              frameWidth,
+              frame,
+            );
+            if (!point) {
+              return null;
+            }
+            return (
+              <Text
+                key={`hood-${item.name}-${item.lat}`}
+                style={[
+                  styles.hoodDistrict,
+                  mode === 'dark' ? styles.hoodDistrictDark : null,
+                  {left: point.x, top: point.y},
+                ]}>
+                {item.name}
+              </Text>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
+}
+
+function mercatorY(latitude: number): number {
+  const rad = (latitude * Math.PI) / 180;
+  return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+}
+
+function projectOnMap(
+  latitude: number,
+  longitude: number,
+  centerLat: number,
+  centerLon: number,
+  zoom: number,
+  width: number,
+  height: number,
+): {x: number; y: number} | null {
+  const world = 256 * 2 ** zoom;
+  const x = width / 2 + ((longitude - centerLon) / 360) * world;
+  const y = height / 2 - ((mercatorY(latitude) - mercatorY(centerLat)) / (2 * Math.PI)) * world;
+  if (x < -80 || y < -30 || x > width + 80 || y > height + 30) {
+    return null;
+  }
+  return {x, y};
 }
 
 function nearestPlace(places: NearbyPlace[], latitude: number, longitude: number, zoom: number): NearbyPlace | null {
@@ -984,6 +1057,47 @@ const styles = StyleSheet.create({
     left: 12,
     bottom: 8,
     color: '#8E84A3',
+  },
+  areaNames: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 8,
+  },
+  cityDistrict: {
+    position: 'absolute',
+    width: 150,
+    marginLeft: -75,
+    marginTop: -8,
+    color: '#3F4654',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+    textShadowColor: '#F4F1EA',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 4,
+  },
+  cityDistrictDark: {
+    color: '#D8D3E6',
+    textShadowColor: '#1C1430',
+  },
+  hoodDistrict: {
+    position: 'absolute',
+    width: 140,
+    marginLeft: -70,
+    marginTop: -8,
+    color: '#5A6270',
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    textShadowColor: '#F4F1EA',
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: 4,
+  },
+  hoodDistrictDark: {
+    color: '#C8C2D6',
+    textShadowColor: '#1C1430',
   },
   destWrap: {alignItems: 'center', gap: 4},
   destName: {

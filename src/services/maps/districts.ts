@@ -24,7 +24,7 @@ export function districtFeatures() {
     type: 'FeatureCollection' as const,
     features: rows.map(row => ({
       type: 'Feature' as const,
-      properties: {name: row.name},
+      properties: {name: shortDistrict(row.name)},
       geometry: {type: 'Point' as const, coordinates: [row.lon, row.lat]},
     })),
   };
@@ -36,16 +36,20 @@ export function cityDistrictFeatures() {
     type: 'FeatureCollection' as const,
     features: cityRows.map(row => ({
       type: 'Feature' as const,
-      properties: {name: row.name.toUpperCase()},
+      properties: {name: shortDistrict(row.name).toUpperCase()},
       geometry: {type: 'Point' as const, coordinates: [row.lon, row.lat]},
     })),
   };
 }
 
 export function districtLabels(): Array<{name: string; lat: number; lon: number}> {
-  return rows.map(row => ({name: row.name, lat: row.lat, lon: row.lon}));
+  return rows.map(row => ({name: shortDistrict(row.name), lat: row.lat, lon: row.lon}));
 }
 
 export function cityDistrictLabels(): Array<{name: string; lat: number; lon: number}> {
-  return cityRows.map(row => ({name: row.name.toUpperCase(), lat: row.lat, lon: row.lon}));
+  return cityRows.map(row => ({name: shortDistrict(row.name).toUpperCase(), lat: row.lat, lon: row.lon}));
+}
+
+function shortDistrict(name: string): string {
+  return name.replace(/\s*район$/i, '').replace(/^район\s+/i, '').trim();
 }

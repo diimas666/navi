@@ -10,3 +10,10 @@ export function openAdapterSetup(): void {
   }
   navigationRef.navigate('OBD');
 }
+
+export function openMap(): void {
+  if (!navigationRef.isReady()) {
+    return;
+  }
+  navigationRef.navigate('Main', {screen: 'Map'});
+}

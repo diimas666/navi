@@ -4,7 +4,7 @@ import type {StyleSpecification} from '@maplibre/maplibre-gl-style-spec';
 import {DARK_STYLE_URL, VECTOR_STYLE_URL} from '../../constants/map';
 import {jsonTooBig, readBoundedJson} from '../jsonLimit';
 
-const STYLE_KEY = 'neiv.basemap.style.v1';
+const STYLE_KEY = 'neiv.basemap.style.v2';
 
 export type BasemapMode = 'light' | 'dark';
 
