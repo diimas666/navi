@@ -1,0 +1,693 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0434F6C70346C035A5734274 /* DeadReckoningEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4051499F2CBAB7D9FBB278 /* DeadReckoningEngine.swift */; };
+		0C80B921A6F3F58F76C31292 /* libPods-Neiv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-Neiv.a */; };
+		0CF1E0A301FCE5A80FA706AC /* RCTNativeDeadReckoningEngine.mm in Sources */ = {isa = PBXBuildFile; fileRef = 858850C95C2D606B73CD878D /* RCTNativeDeadReckoningEngine.mm */; };
+		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		1E7DFCA89EB885BFADE814B3 /* LocationTrustEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A43BD56BD23FFCB0903A62A /* LocationTrustEngine.swift */; };
+		2C799C47CCF01A8EABEBC0B5 /* MapStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3A306BEF96A2A6BE174B0A /* MapStore.swift */; };
+		34590F2549053A33B180B320 /* RCTNativeMotionManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = 68045456645794257549457A /* RCTNativeMotionManager.mm */; };
+		494CC86E37667879814B490F /* RCTNativeMapStore.mm in Sources */ = {isa = PBXBuildFile; fileRef = 71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */; };
+		6BDD5DCAE7B0F8177133EC8A /* ELM327Parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A11EE59A810993C6A38189 /* ELM327Parser.swift */; };
+		72F67E529387B2046346E919 /* NeivJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */; };
+		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		7B2C7CF26393858A84CA42CA /* RCTNativeTripSession.mm in Sources */ = {isa = PBXBuildFile; fileRef = 121350BAB78ACFEE555BA9BB /* RCTNativeTripSession.mm */; };
+		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		85E21C3AD6F6D837DA3821BA /* MotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A8B33BAC0A034AD73F0D11 /* MotionManager.swift */; };
+		A1C0DE11B2A34F5088E61C01 /* SpeechDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */; };
+		A9312B4028DFBC159C7C7605 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		B44923616827E1614FC43071 /* TripSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E585704B8B57C9EB17D23C1 /* TripSession.swift */; };
+		BAC58C4F01C09A438D984B7A /* RCTNativeLocationManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */; };
+		C2DF59EA2103E44D05DEE430 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785D977DD8E774D2D654E037 /* LocationManager.swift */; };
+		C3E2F033D4C56172AA083E23 /* RCTSpeechDictation.mm in Sources */ = {isa = PBXBuildFile; fileRef = D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */; };
+		DE68B0C8FAB6D375FEC31502 /* OBDManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFD6EA31DC2E46773A1EDC4 /* OBDManager.swift */; };
+		F546E46CB6D68B3C7CCBB819 /* RCTNativeOBDManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = 8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		01A11EE59A810993C6A38189 /* ELM327Parser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ELM327Parser.swift; sourceTree = "<group>"; };
+		121350BAB78ACFEE555BA9BB /* RCTNativeTripSession.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeTripSession.mm; sourceTree = "<group>"; };
+		13B07F961A680F5B00A75B9A /* Neiv.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neiv.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Neiv/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Neiv/Info.plist; sourceTree = "<group>"; };
+		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = Neiv/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		3B4392A12AC88292D35C810B /* Pods-Neiv.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Neiv.debug.xcconfig"; path = "Target Support Files/Pods-Neiv/Pods-Neiv.debug.xcconfig"; sourceTree = "<group>"; };
+		3E585704B8B57C9EB17D23C1 /* TripSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TripSession.swift; sourceTree = "<group>"; };
+		5709B34CF0A7D63546082F79 /* Pods-Neiv.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Neiv.release.xcconfig"; path = "Target Support Files/Pods-Neiv/Pods-Neiv.release.xcconfig"; sourceTree = "<group>"; };
+		5ACDB25B4CE528D9A105EF5C /* RCTNativeOBDManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeOBDManager.h; sourceTree = "<group>"; };
+		5B4051499F2CBAB7D9FBB278 /* DeadReckoningEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeadReckoningEngine.swift; sourceTree = "<group>"; };
+		5DCACB8F33CDC322A6C60F78 /* libPods-Neiv.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Neiv.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		68045456645794257549457A /* RCTNativeMotionManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeMotionManager.mm; sourceTree = "<group>"; };
+		71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeMapStore.mm; sourceTree = "<group>"; };
+		721385DF4EF8B2D2E12D6255 /* RCTNativeLocationManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeLocationManager.h; sourceTree = "<group>"; };
+		75A721A04E4C24E145F9E43E /* RCTNativeMapStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeMapStore.h; sourceTree = "<group>"; };
+		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Neiv/AppDelegate.swift; sourceTree = "<group>"; };
+		785D977DD8E774D2D654E037 /* LocationManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Neiv/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		858850C95C2D606B73CD878D /* RCTNativeDeadReckoningEngine.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeDeadReckoningEngine.mm; sourceTree = "<group>"; };
+		8A3A306BEF96A2A6BE174B0A /* MapStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MapStore.swift; sourceTree = "<group>"; };
+		8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeOBDManager.mm; sourceTree = "<group>"; };
+		8BFD6EA31DC2E46773A1EDC4 /* OBDManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OBDManager.swift; sourceTree = "<group>"; };
+		9232187F89D3F88D373F5DE4 /* RCTNativeMotionManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeMotionManager.h; sourceTree = "<group>"; };
+		9A43BD56BD23FFCB0903A62A /* LocationTrustEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocationTrustEngine.swift; sourceTree = "<group>"; };
+		A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NeivJSON.swift; sourceTree = "<group>"; };
+		AC79C4CBEB84AFD65423787C /* RCTNativeTripSession.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeTripSession.h; sourceTree = "<group>"; };
+		B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpeechDictation.swift; sourceTree = "<group>"; };
+		B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTNativeLocationManager.mm; sourceTree = "<group>"; };
+		C4A8B33BAC0A034AD73F0D11 /* MotionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MotionManager.swift; sourceTree = "<group>"; };
+		D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */ = {isa = PBXFileReference; includeInIndex = 1; path = RCTSpeechDictation.mm; sourceTree = "<group>"; };
+		DA18F8FB57F7F83BC61D57CC /* RCTNativeDeadReckoningEngine.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeDeadReckoningEngine.h; sourceTree = "<group>"; };
+		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0C80B921A6F3F58F76C31292 /* libPods-Neiv.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		054817AE285EE9A545416159 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */,
+			);
+			name = Support;
+			path = Support;
+			sourceTree = "<group>";
+		};
+		13B07FAE1A68108700A75B9A /* Neiv */ = {
+			isa = PBXGroup;
+			children = (
+				13B07FB51A68108700A75B9A /* Images.xcassets */,
+				761780EC2CA45674006654EE /* AppDelegate.swift */,
+				13B07FB61A68108700A75B9A /* Info.plist */,
+				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
+				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+			);
+			name = Neiv;
+			sourceTree = "<group>";
+		};
+		25D2F3FD43AD505D037E344B /* OBDManager */ = {
+			isa = PBXGroup;
+			children = (
+				01A11EE59A810993C6A38189 /* ELM327Parser.swift */,
+				8BFD6EA31DC2E46773A1EDC4 /* OBDManager.swift */,
+				5ACDB25B4CE528D9A105EF5C /* RCTNativeOBDManager.h */,
+				8BC94F32B6285EDC0493DB8C /* RCTNativeOBDManager.mm */,
+			);
+			name = OBDManager;
+			path = OBDManager;
+			sourceTree = "<group>";
+		};
+		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
+				5DCACB8F33CDC322A6C60F78 /* libPods-Neiv.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		31A1EABDE9246CAC7DC83542 /* MotionManager */ = {
+			isa = PBXGroup;
+			children = (
+				C4A8B33BAC0A034AD73F0D11 /* MotionManager.swift */,
+				9232187F89D3F88D373F5DE4 /* RCTNativeMotionManager.h */,
+				68045456645794257549457A /* RCTNativeMotionManager.mm */,
+			);
+			name = MotionManager;
+			path = MotionManager;
+			sourceTree = "<group>";
+		};
+		3D400D7B15E5E9FE1DBEC9AE /* DeadReckoningEngine */ = {
+			isa = PBXGroup;
+			children = (
+				5B4051499F2CBAB7D9FBB278 /* DeadReckoningEngine.swift */,
+				DA18F8FB57F7F83BC61D57CC /* RCTNativeDeadReckoningEngine.h */,
+				858850C95C2D606B73CD878D /* RCTNativeDeadReckoningEngine.mm */,
+				AC79C4CBEB84AFD65423787C /* RCTNativeTripSession.h */,
+				121350BAB78ACFEE555BA9BB /* RCTNativeTripSession.mm */,
+				3E585704B8B57C9EB17D23C1 /* TripSession.swift */,
+			);
+			name = DeadReckoningEngine;
+			path = DeadReckoningEngine;
+			sourceTree = "<group>";
+		};
+		7A9776C6F5973A15553EB548 /* NativeModules */ = {
+			isa = PBXGroup;
+			children = (
+				3D400D7B15E5E9FE1DBEC9AE /* DeadReckoningEngine */,
+				D02F9A306CDD2D155AE98D84 /* LocationManager */,
+				ACCAAC3FDB2EB9BA8659B6F3 /* MapStore */,
+				31A1EABDE9246CAC7DC83542 /* MotionManager */,
+				25D2F3FD43AD505D037E344B /* OBDManager */,
+				E5A4155F6E78394CC2205A45 /* Speech */,
+				054817AE285EE9A545416159 /* Support */,
+			);
+			name = NativeModules;
+			path = NativeModules;
+			sourceTree = "<group>";
+		};
+		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Libraries;
+			sourceTree = "<group>";
+		};
+		83CBB9F61A601CBA00E9B192 = {
+			isa = PBXGroup;
+			children = (
+				13B07FAE1A68108700A75B9A /* Neiv */,
+				832341AE1AAA6A7D00B99B32 /* Libraries */,
+				83CBBA001A601CBA00E9B192 /* Products */,
+				2D16E6871FA4F8E400B85C8A /* Frameworks */,
+				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				7A9776C6F5973A15553EB548 /* NativeModules */,
+			);
+			indentWidth = 2;
+			sourceTree = "<group>";
+			tabWidth = 2;
+			usesTabs = 0;
+		};
+		83CBBA001A601CBA00E9B192 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				13B07F961A680F5B00A75B9A /* Neiv.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ACCAAC3FDB2EB9BA8659B6F3 /* MapStore */ = {
+			isa = PBXGroup;
+			children = (
+				8A3A306BEF96A2A6BE174B0A /* MapStore.swift */,
+				75A721A04E4C24E145F9E43E /* RCTNativeMapStore.h */,
+				71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */,
+			);
+			name = MapStore;
+			path = MapStore;
+			sourceTree = "<group>";
+		};
+		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				3B4392A12AC88292D35C810B /* Pods-Neiv.debug.xcconfig */,
+				5709B34CF0A7D63546082F79 /* Pods-Neiv.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		D02F9A306CDD2D155AE98D84 /* LocationManager */ = {
+			isa = PBXGroup;
+			children = (
+				785D977DD8E774D2D654E037 /* LocationManager.swift */,
+				9A43BD56BD23FFCB0903A62A /* LocationTrustEngine.swift */,
+				721385DF4EF8B2D2E12D6255 /* RCTNativeLocationManager.h */,
+				B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */,
+			);
+			name = LocationManager;
+			path = LocationManager;
+			sourceTree = "<group>";
+		};
+		E5A4155F6E78394CC2205A45 /* Speech */ = {
+			isa = PBXGroup;
+			children = (
+				B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */,
+				D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */,
+			);
+			name = Speech;
+			path = Speech;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		13B07F861A680F5B00A75B9A /* Neiv */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Neiv" */;
+			buildPhases = (
+				C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */,
+				13B07F871A680F5B00A75B9A /* Sources */,
+				13B07F8C1A680F5B00A75B9A /* Frameworks */,
+				13B07F8E1A680F5B00A75B9A /* Resources */,
+				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
+				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
+				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
+				5A35C096D85B1494A12721BF /* [MapLibre React Native] Remove MapLibre.xcframework-ios.signature */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Neiv;
+			packageProductDependencies = (
+				BC8F5770C4D906EE6C61D2AB /* MapLibre */,
+			);
+			productName = Neiv;
+			productReference = 13B07F961A680F5B00A75B9A /* Neiv.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		83CBB9F71A601CBA00E9B192 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1210;
+				TargetAttributes = {
+					13B07F861A680F5B00A75B9A = {
+						LastSwiftMigration = 1120;
+					};
+				};
+			};
+			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Neiv" */;
+			compatibilityVersion = "Xcode 12.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 83CBB9F61A601CBA00E9B192;
+			packageReferences = (
+				D0F3335817E837CF44C7428E /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
+			);
+			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				13B07F861A680F5B00A75B9A /* Neiv */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		13B07F8E1A680F5B00A75B9A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
+				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				A9312B4028DFBC159C7C7605 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/.xcode.env",
+			);
+			name = "Bundle React Native code and images";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"\\\"$WITH_ENVIRONMENT\\\" \\\"$REACT_NATIVE_XCODE\\\"\"\n";
+		};
+		00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Neiv/Pods-Neiv-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Neiv/Pods-Neiv-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Neiv/Pods-Neiv-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		5A35C096D85B1494A12721BF /* [MapLibre React Native] Remove MapLibre.xcframework-ios.signature */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "[MapLibre React Native] Remove MapLibre.xcframework-ios.signature";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "rm -rf \"$CONFIGURATION_BUILD_DIR/MapLibre.xcframework-ios.signature\"";
+		};
+		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Neiv-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E235C05ADACE081382539298 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Neiv/Pods-Neiv-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Neiv/Pods-Neiv-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Neiv/Pods-Neiv-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		13B07F871A680F5B00A75B9A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				0434F6C70346C035A5734274 /* DeadReckoningEngine.swift in Sources */,
+				0CF1E0A301FCE5A80FA706AC /* RCTNativeDeadReckoningEngine.mm in Sources */,
+				7B2C7CF26393858A84CA42CA /* RCTNativeTripSession.mm in Sources */,
+				B44923616827E1614FC43071 /* TripSession.swift in Sources */,
+				C2DF59EA2103E44D05DEE430 /* LocationManager.swift in Sources */,
+				1E7DFCA89EB885BFADE814B3 /* LocationTrustEngine.swift in Sources */,
+				BAC58C4F01C09A438D984B7A /* RCTNativeLocationManager.mm in Sources */,
+				2C799C47CCF01A8EABEBC0B5 /* MapStore.swift in Sources */,
+				494CC86E37667879814B490F /* RCTNativeMapStore.mm in Sources */,
+				85E21C3AD6F6D837DA3821BA /* MotionManager.swift in Sources */,
+				34590F2549053A33B180B320 /* RCTNativeMotionManager.mm in Sources */,
+				6BDD5DCAE7B0F8177133EC8A /* ELM327Parser.swift in Sources */,
+				DE68B0C8FAB6D375FEC31502 /* OBDManager.swift in Sources */,
+				F546E46CB6D68B3C7CCBB819 /* RCTNativeOBDManager.mm in Sources */,
+				72F67E529387B2046346E919 /* NeivJSON.swift in Sources */,
+				A1C0DE11B2A34F5088E61C01 /* SpeechDictation.swift in Sources */,
+				C3E2F033D4C56172AA083E23 /* RCTSpeechDictation.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		13B07F941A680F5B00A75B9A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3B4392A12AC88292D35C810B /* Pods-Neiv.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_BITCODE = NO;
+				INFOPLIST_FILE = Neiv/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.neiv.app;
+				PRODUCT_NAME = Neiv;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OBJC_BRIDGING_HEADER = "Neiv/Neiv-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		13B07F951A680F5B00A75B9A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5709B34CF0A7D63546082F79 /* Pods-Neiv.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Neiv/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.neiv.app;
+				PRODUCT_NAME = Neiv;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OBJC_BRIDGING_HEADER = "Neiv/Neiv-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		83CBBA201A601CBA00E9B192 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					/usr/lib/swift,
+					"$(inherited)",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"\"$(SDKROOT)/usr/lib/swift\"",
+					"\"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)\"",
+					"\"$(inherited)\"",
+				);
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-DFOLLY_NO_CONFIG",
+					"-DFOLLY_MOBILE=1",
+					"-DFOLLY_USE_LIBCPP=1",
+					"-DFOLLY_CFG_NO_COROUTINES=1",
+					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				USE_HERMES = true;
+			};
+			name = Debug;
+		};
+		83CBBA211A601CBA00E9B192 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					/usr/lib/swift,
+					"$(inherited)",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"\"$(SDKROOT)/usr/lib/swift\"",
+					"\"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)\"",
+					"\"$(inherited)\"",
+				);
+				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-DFOLLY_NO_CONFIG",
+					"-DFOLLY_MOBILE=1",
+					"-DFOLLY_USE_LIBCPP=1",
+					"-DFOLLY_CFG_NO_COROUTINES=1",
+					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
+				SDKROOT = iphoneos;
+				USE_HERMES = true;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Neiv" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				13B07F941A680F5B00A75B9A /* Debug */,
+				13B07F951A680F5B00A75B9A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Neiv" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				83CBBA201A601CBA00E9B192 /* Debug */,
+				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D0F3335817E837CF44C7428E /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
+			requirement = {
+				kind = exactVersion;
+				version = 6.31.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BC8F5770C4D906EE6C61D2AB /* MapLibre */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0F3335817E837CF44C7428E /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
+			productName = MapLibre;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 83CBB9F71A601CBA00E9B192 /* Project object */;
+}

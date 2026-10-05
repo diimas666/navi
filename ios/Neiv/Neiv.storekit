@@ -1,0 +1,104 @@
+{
+  "identifier" : "NeivStore",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "20F2B4C1",
+      "localizations" : [
+
+      ],
+      "name" : "DR Protection",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "29.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "monthly",
+          "localizations" : [
+            {
+              "description" : "Оцінка положення, коли GPS недоступний або спотворений.",
+              "displayName" : "DR-захист",
+              "locale" : "uk"
+            }
+          ],
+          "productID" : "com.navi.app.dr.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "DR Monthly",
+          "subscriptionGroupID" : "20F2B4C1",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "199.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "yearly",
+          "localizations" : [
+            {
+              "description" : "Річний DR-захист.",
+              "displayName" : "DR-захист на рік",
+              "locale" : "uk"
+            }
+          ],
+          "productID" : "com.navi.app.dr.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "DR Yearly",
+          "subscriptionGroupID" : "20F2B4C1",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

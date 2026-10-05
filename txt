@@ -1,0 +1,4 @@
+yarn ios
+
+cd /Volumes/Extreme_SSD/Projects/navi
+yarn start
