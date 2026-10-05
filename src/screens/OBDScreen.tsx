@@ -21,10 +21,13 @@ const copy = {
     search: 'Шукати',
     searching: 'Шукаємо…',
     disconnect: 'Відключити',
+    host: 'Адреса адаптера',
+    port: 'Порт',
     idle: 'очікування',
     scanning: 'пошук',
     connecting: 'з’єднання',
     ready: 'підключено',
+    failed: 'не вдалося',
     speed: 'Швидкість',
     rpm: 'Оберти',
     load: 'Навантаження',
@@ -41,10 +44,13 @@ const copy = {
     search: 'Искать',
     searching: 'Ищем…',
     disconnect: 'Отключить',
+    host: 'Адрес адаптера',
+    port: 'Порт',
     idle: 'ожидание',
     scanning: 'поиск',
     connecting: 'соединение',
     ready: 'подключено',
+    failed: 'не удалось',
     speed: 'Скорость',
     rpm: 'Обороты',
     load: 'Нагрузка',
@@ -62,16 +68,26 @@ export function OBDScreen() {
   const connection = useObdStore(store => store.state);
   const devices = useObdStore(store => store.devices);
   const snapshot = useObdStore(store => store.snapshot);
+  const activeId = useObdStore(store => store.activeId);
+  const note = useObdStore(store => store.message);
   const wifiHost = useSettingsStore(store => store.wifiHost);
   const wifiPort = useSettingsStore(store => store.wifiPort);
   const [host, setHost] = useState(wifiHost);
+  const [port, setPort] = useState(String(wifiPort));
+
+  const pickTransport = (next: 'ble' | 'wifi') => {
+    useObdStore.getState().setTransport(next);
+    NativeOBDManager?.setTransport(next);
+  };
 
   const scan = () => {
-    useObdStore.getState().setTransport(transport);
+    const nextPort = Number(port);
+    const endpoint = Number.isFinite(nextPort) && nextPort > 0 ? Math.round(nextPort) : 35000;
+    useObdStore.getState().clearDevices();
     NativeOBDManager?.setTransport(transport);
     if (transport === 'wifi') {
-      NativeOBDManager?.setWifiEndpoint(host, wifiPort);
-      useSettingsStore.getState().setWifi(host, wifiPort);
+      NativeOBDManager?.setWifiEndpoint(host, endpoint);
+      useSettingsStore.getState().setWifi(host, endpoint);
     }
     NativeOBDManager?.startScan();
   };
@@ -88,12 +104,12 @@ export function OBDScreen() {
           <TransportChoice
             title={text.ble}
             selected={transport === 'ble'}
-            onPress={() => useObdStore.getState().setTransport('ble')}
+            onPress={() => pickTransport('ble')}
           />
           <TransportChoice
             title={text.wifi}
             selected={transport === 'wifi'}
-            onPress={() => useObdStore.getState().setTransport('wifi')}
+            onPress={() => pickTransport('wifi')}
           />
         </View>
 
@@ -102,33 +118,55 @@ export function OBDScreen() {
         </Text>
 
         {transport === 'wifi' ? (
-          <TextInput
-            value={host}
-            onChangeText={setHost}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="192.168.0.10"
-            placeholderTextColor={colors.textMuted}
-            style={[
-              styles.input,
-              {color: colors.textPrimary, backgroundColor: colors.surface, borderColor: colors.border},
-            ]}
-          />
+          <View style={styles.wifiRow}>
+            <TextInput
+              value={host}
+              onChangeText={setHost}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={text.host}
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                styles.host,
+                {color: colors.textPrimary, backgroundColor: colors.surface, borderColor: colors.border},
+              ]}
+            />
+            <TextInput
+              value={port}
+              onChangeText={setPort}
+              keyboardType="number-pad"
+              placeholder={text.port}
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                styles.port,
+                {color: colors.textPrimary, backgroundColor: colors.surface, borderColor: colors.border},
+              ]}
+            />
+          </View>
         ) : null}
 
         <PrimaryButton title={connection === 'scanning' ? text.searching : text.search} onPress={scan} />
 
-        {devices.map(device => (
-          <OBDDeviceCard
-            key={device.id}
-            device={device}
-            connected={connection === 'ready'}
-            connectedLabel={text.connected}
-            onPress={() => {
-              NativeOBDManager?.connect(device.id).catch(() => undefined);
-            }}
-          />
-        ))}
+        {connection === 'failed' && note ? (
+          <Text style={[type.caption, {color: colors.danger}]}>{note}</Text>
+        ) : null}
+
+        {devices
+          .filter(device => device.transport === transport)
+          .map(device => (
+            <OBDDeviceCard
+              key={device.id}
+              device={device}
+              connected={connection === 'ready' && activeId === device.id}
+              connectedLabel={text.connected}
+              onPress={() => {
+                useObdStore.getState().setActiveId(device.id);
+                NativeOBDManager?.connect(device.id).catch(() => undefined);
+              }}
+            />
+          ))}
 
         <View style={[styles.card, {backgroundColor: colors.surface}]}>
           <Reading label={text.speed} value={snapshot?.hasSpeed ? `${Math.round(snapshot.speedKmh)} км/год` : '—'} />
@@ -155,16 +193,19 @@ export function OBDScreen() {
 
 function stateLabel(
   state: string,
-  text: {idle: string; scanning: string; connecting: string; ready: string},
+  text: {idle: string; scanning: string; connecting: string; ready: string; failed: string},
 ): string {
   if (state === 'scanning') {
     return text.scanning;
   }
-  if (state === 'connecting') {
+  if (state === 'connecting' || state === 'initializing') {
     return text.connecting;
   }
   if (state === 'ready') {
     return text.ready;
+  }
+  if (state === 'failed') {
+    return text.failed;
   }
   return text.idle;
 }
@@ -212,6 +253,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  wifiRow: {flexDirection: 'row', gap: 8},
   input: {
     borderWidth: 1,
     borderRadius: radius.md,
@@ -219,6 +261,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 17,
   },
+  host: {flex: 1},
+  port: {width: 96},
   card: {
     borderRadius: 18,
     paddingHorizontal: 16,

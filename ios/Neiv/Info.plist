@@ -47,6 +47,8 @@
 	<string>Navi connects to an OBD-II adapter over Bluetooth to read the car's speed.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Navi connects to an OBD-II adapter over Bluetooth to read the car's speed.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Navi reaches a Wi-Fi OBD-II adapter on the car's local network to read speed.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>During an active trip, Navi keeps your location while the screen is locked so guidance does not stop.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

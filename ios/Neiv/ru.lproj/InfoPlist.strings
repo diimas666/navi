@@ -1,5 +1,6 @@
 "NSBluetoothAlwaysUsageDescription" = "Navi подключается к OBD-II адаптеру по Bluetooth, чтобы читать скорость автомобиля.";
 "NSBluetoothPeripheralUsageDescription" = "Navi подключается к OBD-II адаптеру по Bluetooth, чтобы читать скорость автомобиля.";
+"NSLocalNetworkUsageDescription" = "Navi находит Wi-Fi OBD-II адаптер в локальной сети машины, чтобы читать скорость.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "Чтобы маршрут не обрывался на заблокированном экране, Navi продолжает получать геопозицию во время активной поездки.";
 "NSLocationWhenInUseUsageDescription" = "Navi показывает автомобиль на карте и берёт отсюда точку, от которой продолжает оценку, если GPS пропадёт.";
 "NSMicrophoneUsageDescription" = "Микрофон нужен, чтобы назвать адрес голосом.";

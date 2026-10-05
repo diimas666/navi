@@ -69,6 +69,7 @@ import Darwin
     if transport == "wifi" {
       scanToken += 1
       let token = scanToken
+      central?.stopScan()
       cancelProbes()
       devices.removeAll()
       publishWifi(wifiHost)
@@ -95,6 +96,8 @@ import Darwin
       }
       return
     }
+    cancelProbes()
+    devices = devices.filter { ($0.value["transport"] as? String) == "ble" }
     ensureCentral()
     publishState("scanning", "Шукаємо адаптери")
     if central?.state == .poweredOn {
@@ -112,6 +115,7 @@ import Darwin
   }
 
   @objc public func connect(_ deviceId: String, completion: @escaping (Bool) -> Void) {
+    resetLink()
     connectCompletion = completion
     publishState("connecting", "Підключення")
     if deviceId.hasPrefix("wifi:") || transport == "wifi" {
@@ -132,16 +136,7 @@ import Darwin
   }
 
   @objc public func disconnect(_ completion: @escaping () -> Void) {
-    pollTimer?.cancel()
-    pollTimer = nil
-    pending.removeAll()
-    busy = false
-    if let peripheral {
-      central?.cancelPeripheralConnection(peripheral)
-    }
-    wifi?.cancel()
-    wifi = nil
-    clearReadings()
+    resetLink()
     publishState("disconnected", "Відключено")
     completion()
   }
@@ -173,7 +168,6 @@ import Darwin
     ]
     devices[peripheral.identifier.uuidString] = device
     peripherals[peripheral.identifier.uuidString] = peripheral
-    self.peripheral = peripheral
     onDevice?(device)
   }
 
@@ -204,6 +198,7 @@ import Darwin
         writeCharacteristic = characteristic
       }
     }
+    tryStartSetup()
   }
 
   public func peripheral(
@@ -211,9 +206,7 @@ import Darwin
     didUpdateNotificationStateFor characteristic: CBCharacteristic,
     error: Error?
   ) {
-    guard writeCharacteristic != nil, state == "initializing", !setupStarted else { return }
-    setupStarted = true
-    runSetup(0)
+    tryStartSetup()
   }
 
   public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
@@ -351,12 +344,46 @@ import Darwin
   }
 
   private func receiveWifi() {
-    wifi?.receive(minimumIncompleteLength: 1, maximumLength: 512) { [weak self] data, _, _, _ in
+    guard let connection = wifi else { return }
+    connection.receive(minimumIncompleteLength: 1, maximumLength: 512) { [weak self] data, _, complete, error in
       if let data, let text = String(data: data, encoding: .utf8) {
         DispatchQueue.main.async { self?.accept(text) }
       }
+      if complete || error != nil {
+        return
+      }
       self?.receiveWifi()
     }
+  }
+
+  private func tryStartSetup() {
+    guard writeCharacteristic != nil, state == "initializing", !setupStarted else { return }
+    setupStarted = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+      guard let self, self.state == "initializing" else { return }
+      self.runSetup(0)
+    }
+  }
+
+  private func resetLink() {
+    pollTimer?.cancel()
+    pollTimer = nil
+    timeoutWork?.cancel()
+    timeoutWork = nil
+    pending.removeAll()
+    busy = false
+    activeCompletion = nil
+    buffer = ""
+    setupStarted = false
+    writeCharacteristic = nil
+    if let peripheral {
+      central?.cancelPeripheralConnection(peripheral)
+    }
+    peripheral = nil
+    wifi?.cancel()
+    wifi = nil
+    clearReadings()
+    onData?(snapshot())
   }
 
   private func runSetup(_ index: Int) {

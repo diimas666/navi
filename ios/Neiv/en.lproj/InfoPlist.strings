@@ -1,5 +1,6 @@
 "NSBluetoothAlwaysUsageDescription" = "Navi connects to an OBD-II adapter over Bluetooth to read the car's speed.";
 "NSBluetoothPeripheralUsageDescription" = "Navi connects to an OBD-II adapter over Bluetooth to read the car's speed.";
+"NSLocalNetworkUsageDescription" = "Navi reaches a Wi-Fi OBD-II adapter on the car's local network to read speed.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "During an active trip, Navi keeps your location while the screen is locked so guidance does not stop.";
 "NSLocationWhenInUseUsageDescription" = "Navi shows the car on the map and uses this point to keep estimating position if GPS drops.";
 "NSMicrophoneUsageDescription" = "The microphone is used so you can speak an address.";
