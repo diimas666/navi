@@ -2,6 +2,33 @@ import type {RoutePlan} from '../../models/domain';
 import {haversineMeters} from '../../utils/geo';
 import {distanceToRoute} from './offRoute';
 
+export type RoutePref = 'faster' | 'shorter' | 'noHighway';
+
+export function rankRoutes(routes: RoutePlan[], pref: RoutePref): RoutePlan[] {
+  return [...routes].sort((left, right) => routeScore(left, pref) - routeScore(right, pref));
+}
+
+export function highwayMeters(route: RoutePlan): number {
+  return route.steps.reduce((sum, step) => sum + (isHighwayStep(step.name, step.speedKmh) ? step.distanceM : 0), 0);
+}
+
+function routeScore(route: RoutePlan, pref: RoutePref): number {
+  if (pref === 'faster') {
+    return route.durationS;
+  }
+  if (pref === 'shorter') {
+    return route.distanceM;
+  }
+  return route.distanceM + highwayMeters(route) * 2.2;
+}
+
+function isHighwayStep(name: string, speedKmh?: number): boolean {
+  if ((speedKmh ?? 0) >= 90) {
+    return true;
+  }
+  return /\b[мнmnh][- ]?\d|\be-?\d|автошлях|автострада|траса|freeway|motorway|highway/i.test(name);
+}
+
 export function keepDistinctRoutes(routes: RoutePlan[]): RoutePlan[] {
   const primary = routes[0];
   if (!primary) {

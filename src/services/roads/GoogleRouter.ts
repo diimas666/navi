@@ -23,6 +23,14 @@ export async function googleDrivingRoutes(
   if (!googleDrivingReady()) {
     return [];
   }
+  try {
+    const modern = await routesApiRoutes(originLat, originLon, destinationLat, destinationLon, stops);
+    if (modern.length > 0) {
+      return modern;
+    }
+  } catch {
+    // Routes API is off on the AutoCare key. Legacy Directions may still answer.
+  }
   const language = useSettingsStore.getState().language === 'ru' ? 'ru' : 'uk';
   const params = new URLSearchParams({
     origin: `${originLat},${originLon}`,
@@ -99,6 +107,103 @@ export async function googleDrivingRoutes(
     };
     return [plan];
   });
+}
+
+async function routesApiRoutes(
+  originLat: number,
+  originLon: number,
+  destinationLat: number,
+  destinationLon: number,
+  stops: Array<{latitude: number; longitude: number}>,
+): Promise<RoutePlan[]> {
+  const language = useSettingsStore.getState().language === 'ru' ? 'ru' : 'uk';
+  const body: Record<string, unknown> = {
+    origin: {location: {latLng: {latitude: originLat, longitude: originLon}}},
+    destination: {location: {latLng: {latitude: destinationLat, longitude: destinationLon}}},
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_UNAWARE',
+    computeAlternativeRoutes: stops.length === 0,
+    languageCode: language,
+    regionCode: 'UA',
+    units: 'METRIC',
+    polylineQuality: 'HIGH_QUALITY',
+  };
+  if (stops.length > 0) {
+    body.intermediates = stops.map(stop => ({
+      location: {latLng: {latitude: stop.latitude, longitude: stop.longitude}},
+    }));
+  }
+  const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+      'X-Goog-FieldMask':
+        'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.startLocation',
+      ...HEADERS,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const payload = (await response.json()) as {
+    routes?: Array<{
+      duration?: string;
+      distanceMeters?: number;
+      polyline?: {encodedPolyline?: string};
+      legs?: Array<{
+        steps?: Array<{
+          distanceMeters?: number;
+          navigationInstruction?: {instructions?: string; maneuver?: string};
+          polyline?: {encodedPolyline?: string};
+          startLocation?: {latLng?: {latitude?: number; longitude?: number}};
+        }>;
+      }>;
+    }>;
+  };
+  const streets = uiCopy(useSettingsStore.getState().language).streets;
+  return (payload.routes ?? []).flatMap(route => {
+    const coordinates = decodePolyline(route.polyline?.encodedPolyline ?? '');
+    if (coordinates.length < 2 || !geometryStartsNear(coordinates, originLat, originLon, 80_000)) {
+      return [];
+    }
+    let alongM = 0;
+    const steps = (route.legs ?? []).flatMap(leg =>
+      (leg.steps ?? []).map(step => {
+        const item = {
+          name: streetName(step.navigationInstruction?.instructions, streets),
+          distanceM: step.distanceMeters ?? 0,
+          alongM,
+          latitude: step.startLocation?.latLng?.latitude,
+          longitude: step.startLocation?.latLng?.longitude,
+          coordinates: decodePolyline(step.polyline?.encodedPolyline ?? ''),
+          kind: googleKind(step.navigationInstruction?.maneuver),
+          modifier: googleModifier(step.navigationInstruction?.maneuver),
+        };
+        alongM += step.distanceMeters ?? 0;
+        return item;
+      }),
+    );
+    return [
+      {
+        distanceM: route.distanceMeters || polylineLength(coordinates),
+        durationS: secondsOf(route.duration) || polylineLength(coordinates) / 16,
+        steps: steps.length > 0 ? steps : [{name: streets, distanceM: route.distanceMeters ?? 0, alongM: 0, kind: 'depart'}],
+        coordinates,
+        via: 'street' as const,
+      },
+    ];
+  });
+}
+
+function secondsOf(value?: string): number {
+  if (!value) {
+    return 0;
+  }
+  const match = /^(\d+(?:\.\d+)?)s$/.exec(value);
+  return match ? Number(match[1]) : 0;
 }
 
 export function decodePolyline(encoded: string): Array<[number, number]> {

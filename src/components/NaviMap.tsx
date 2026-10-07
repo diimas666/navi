@@ -129,6 +129,7 @@ export function NaviMap({
   const mapMode = nightMap ? 'dark' : mode;
   const language = useSettingsStore(state => state.language);
   const placeIcons = useSettingsStore(state => state.placeIcons);
+  const satelliteMap = useSettingsStore(state => state.satelliteMap);
   const copy = uiCopy(language);
   const cameraRef = useRef<CameraRef>(null);
   const lastCameraMove = useRef(0);
@@ -787,6 +788,7 @@ export function NaviMap({
             placeIcons={placeIcons}
             nearby={nearby}
             night={mapMode === 'dark'}
+            satellite={satelliteMap && !offlineMap}
             onUserMove={onUserMove}
             onGesture={onGesture}
             onLook={(lookLatitude, lookLongitude, lookZoom) => {

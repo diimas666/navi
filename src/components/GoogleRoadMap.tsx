@@ -33,6 +33,7 @@ type Props = {
   placeIcons: boolean;
   nearby: NearbyPlace[];
   night?: boolean;
+  satellite?: boolean;
   onUserMove?: (zoom: number) => void;
   onGesture?: (holding: boolean, zoom: number) => void;
   onLook?: (latitude: number, longitude: number, zoom: number) => void;
@@ -62,6 +63,7 @@ export function GoogleRoadMap({
   placeIcons,
   nearby,
   night = false,
+  satellite = false,
   onUserMove,
   onGesture,
   onLook,
@@ -96,6 +98,8 @@ export function GoogleRoadMap({
   placeIconsRef.current = placeIcons;
   const nightRef = useRef(night);
   nightRef.current = night;
+  const satelliteRef = useRef(satellite);
+  satelliteRef.current = satellite;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -131,6 +135,10 @@ export function GoogleRoadMap({
     send(`window.navi.places(${placeIconsRef.current ? 1 : 0},${nightRef.current ? 1 : 0})`);
   };
 
+  const pushLayer = () => {
+    send(`window.navi.layer(${satelliteRef.current ? 1 : 0})`);
+  };
+
   const pushMarks = () => {
     send(`window.navi.marks(${JSON.stringify(nearby)})`);
   };
@@ -162,6 +170,11 @@ export function GoogleRoadMap({
     // The map page is created once. The switch only flips Google's place icons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeIcons, night]);
+
+  useEffect(() => {
+    pushLayer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [satellite]);
 
   const marksKey = nearby.map(item => item.id).join(',');
   useEffect(() => {
@@ -201,6 +214,7 @@ export function GoogleRoadMap({
       pushView();
       pushRoute();
       pushPlaces();
+      pushLayer();
       pushMarks();
       return;
     }
@@ -316,6 +330,8 @@ function initMap(){
     ];
   }
   var placesOn = ${placeIcons ? 'true' : 'false'};
+  var darkOn = false;
+  var satelliteOn = false;
   var map = new google.maps.Map(document.getElementById('map'), {
     center: {lat: ${latitude}, lng: ${longitude}},
     zoom: ${zoom},
@@ -448,9 +464,25 @@ function initMap(){
       if (!used) return;
       map.fitBounds(bounds, {top: 120, right: 48, bottom: 280, left: 48});
     },
+    layer: function(on){
+      satelliteOn = !!on;
+      if (satelliteOn) {
+        map.setMapTypeId('hybrid');
+        map.setOptions({styles: []});
+        return;
+      }
+      map.setMapTypeId('roadmap');
+      map.setOptions({styles: placeStyle(placesOn).concat(darkOn ? nightStyle() : [])});
+    },
     places: function(on, dark){
       placesOn = !!on;
-      map.setOptions({clickableIcons: placesOn, styles: placeStyle(placesOn).concat(dark ? nightStyle() : [])});
+      darkOn = !!dark;
+      if (satelliteOn) {
+        map.setOptions({clickableIcons: placesOn, styles: []});
+        if (!placesOn) window.navi.marks([]);
+        return;
+      }
+      map.setOptions({clickableIcons: placesOn, styles: placeStyle(placesOn).concat(darkOn ? nightStyle() : [])});
       if (!placesOn) window.navi.marks([]);
     },
     marks: function(items){

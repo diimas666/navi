@@ -70,6 +70,7 @@ export function MapScreen({navigation}: Props) {
   const locked = useSessionStore(state => state.locked);
   const manualLock = useSessionStore(state => state.manualLock);
   const voice = useSettingsStore(state => state.voice);
+  const satelliteMap = useSettingsStore(state => state.satelliteMap);
   const adapterState = useObdStore(state => state.state);
   const adapterReady = adapterState === 'ready';
   const online = useMapStore(state => state.online);
@@ -599,6 +600,13 @@ export function MapScreen({navigation}: Props) {
           zoomRef.current = Math.max(12, zoomRef.current - 1);
           movedAt.current = Date.now();
           setZoomToken(token => token + 1);
+        }}
+        satellite={satelliteMap}
+        online={online}
+        onSatellite={() => {
+          const next = !useSettingsStore.getState().satelliteMap;
+          useSettingsStore.getState().setSatelliteMap(next);
+          saveSettings(selectPersisted(useSettingsStore.getState())).catch(() => undefined);
         }}
       />
       {driving ? <TripReadout limitKmh={limitKmh} night={nightMap} cameraM={cameraM} /> : null}

@@ -10,7 +10,8 @@ import {streetRoutes} from '../roads/StreetRouter';
 import {haversineMeters, projectOntoSegment} from '../../utils/geo';
 import {placeFix} from './placeFix';
 import {distanceToRoute, shouldRebuild} from './offRoute';
-import {keepDistinctRoutes, dropPassedStops, isAirLine} from './routeChoice';
+import {keepDistinctRoutes, dropPassedStops, isAirLine, rankRoutes} from './routeChoice';
+import {useSettingsStore} from '../../store/settingsStore';
 import {matchesStreet} from '../maps/addressQuery';
 import {planThroughStops} from './joinPlans';
 
@@ -139,13 +140,15 @@ async function collectRoutes(
   const offline = planThroughStops(routingGraph(), originLat, originLon, destinationLat, destinationLon, stops)
     .map(route => finish(route, 'graph'))
     .filter(route => startsNear(route, originLat, originLon));
-  const streetOk = street.filter(route => !isAirLine(route)).sort((left, right) => left.distanceM - right.distanceM);
-  if (streetOk.length > 0 && !(stops.length === 0 && straight < 900 && isLongLoop(streetOk[0], straight))) {
-    return keepDistinctRoutes(streetOk.filter(route => route.distanceM <= Math.max(streetOk[0].distanceM * 1.28, streetOk[0].distanceM + 80)));
-  }
-  let pool = [...streetOk, ...offline.filter(route => !isAirLine(route))].sort(
-    (left, right) => left.distanceM - right.distanceM,
+  const pref = useSettingsStore.getState().routePref;
+  const streetOk = rankRoutes(
+    street.filter(route => !isAirLine(route)),
+    pref,
   );
+  if (streetOk.length > 0 && !(stops.length === 0 && straight < 900 && isLongLoop(streetOk[0], straight))) {
+    return keepDistinctRoutes(streetOk);
+  }
+  let pool = rankRoutes([...streetOk, ...offline.filter(route => !isAirLine(route))], pref);
   if (stops.length === 0 && straight < 900 && isLongLoop(pool[0], straight)) {
     const curb = nearerCurb(destinationLat, destinationLon, originLat, originLon);
     if (curb) {
@@ -155,28 +158,22 @@ async function collectRoutes(
         )
           .filter(route => startsNear(route, originLat, originLon))
           .map(route => finish(route, 'street'));
-        pool = [...retry, ...pool]
-          .filter(route => !isAirLine(route))
-          .sort((left, right) => left.distanceM - right.distanceM);
+        pool = rankRoutes([...retry, ...pool].filter(route => !isAirLine(route)), pref);
       } catch {
         // The first street answer stays if the nearer curb request fails.
       }
       const graphRetry = planRoutes(routingGraph(), originLat, originLon, curb.latitude, curb.longitude)
         .map(route => finish(route, 'graph'))
         .filter(route => startsNear(route, originLat, originLon));
-      pool = [...graphRetry, ...pool]
-        .filter(route => !isAirLine(route))
-        .sort((left, right) => left.distanceM - right.distanceM);
+      pool = rankRoutes([...graphRetry, ...pool].filter(route => !isAirLine(route)), pref);
     }
   }
   if (pool.length > 0) {
-    const streets = pool
-      .filter(route => route.via === 'street')
-      .sort((left, right) => left.distanceM - right.distanceM);
-    const source = streets.length > 0 ? streets : pool;
-    const shortest = source[0];
-    const kept = source.filter(route => route.distanceM <= Math.max(shortest.distanceM * 1.28, shortest.distanceM + 80));
-    return keepDistinctRoutes(kept);
+    const streets = rankRoutes(
+      pool.filter(route => route.via === 'street'),
+      pref,
+    );
+    return keepDistinctRoutes(streets.length > 0 ? streets : pool);
   }
   const approach = directApproach(from.latitude, from.longitude, destinationLat, destinationLon);
   return approach ? [approach] : [];

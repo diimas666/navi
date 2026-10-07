@@ -26,6 +26,8 @@ export type PersistedSettings = Pick<
   | 'mapCoach'
   | 'coachSeen'
   | 'voice'
+  | 'satelliteMap'
+  | 'routePref'
   | 'calibration'
 >;
 
@@ -53,6 +55,12 @@ export async function loadSettings(): Promise<Partial<PersistedSettings>> {
     record.mapCoach = false;
   }
   record.unit = 'kmh';
+  if (record.satelliteMap == null) {
+    record.satelliteMap = true;
+  }
+  if (record.routePref !== 'faster' && record.routePref !== 'shorter' && record.routePref !== 'noHighway') {
+    record.routePref = 'shorter';
+  }
   return record;
 }
 
@@ -82,6 +90,8 @@ export function selectPersisted(state: SettingsState): PersistedSettings {
     mapCoach: state.mapCoach,
     coachSeen: state.coachSeen,
     voice: state.voice,
+    satelliteMap: state.satelliteMap,
+    routePref: state.routePref,
     calibration: state.calibration,
   };
 }
