@@ -1,0 +1,126 @@
+Navi — тексти для App Store Connect
+Версія 1.0.0 · збірка 5 · bundle com.neiv.app
+Назва на іконці: Navi
+Категорія: Навігація
+Авторські права: 2026 Dima Tichtey
+Вік: 4+
+
+Посилання (обов’язкові):
+Підтримка:     https://diimas666.github.io/navi/
+Політика:      https://diimas666.github.io/navi/privacy.html
+Маркетинг:     https://diimas666.github.io/navi/
+Пошта:         uu36548@gmail.com
+
+Скріншоти (портрет, готові файли в store/screenshots/):
+iPhone 6,1–6,3":  iphone-1179x2556/  або  iphone-1206x2622/
+iPad 12,9–13":    ipad-2048x2732/    або  ipad-2064x2752/
+Порядок: 01-search, 02-houses, 03-route, 04-saved
+Попередній перегляд (відео) не обов’язковий. Якщо робитимете ролик: 886×1920 (iPhone) і 1200×1600 (iPad).
+
+
+========== УКРАЇНСЬКА ==========
+
+Назва: Navi
+Підзаголовок (30): Навігатор Україною офлайн
+
+Рекламний текст (170):
+Офлайн-навігатор Україною: маршрут вулицями, номери будинків і карти областей у телефоні. Працює з мережею і без неї.
+
+Ключові слова (100):
+навігатор,офлайн,україна,карти,gps,маршрут,одеса,київ,голос,будинки
+
+Що нового:
+Перший публічний випуск. Маршрут вулицями України, номери будинків на карті, офлайн-області, голос і ведення з інтернетом і без нього.
+
+Опис:
+Navi — навігатор для поїздок Україною. Шукаєте адресу, бачите маршрут вулицями і їдете. Карти областей зберігаються в телефоні, тому без мережі ви не лишаєтесь без карти.
+
+Що вміє
+• Пошук вулиці, будинку, місця і точки з буфера
+• Маршрут дорогами, не крізь двори і будинки
+• Номери будинків на карті, коли наближаєте
+• Голосові підказки поворотів
+• Дім, робота і свої адреси в один дотик
+• Завантаження області: Одеса, Київ, Львів та інші
+• Ведення, коли GPS слабкий: оцінка за датчиками телефона і, якщо є, швидкістю з OBD-II
+
+З інтернетом Navi бере живий маршрут і пошук. Без інтернету лишаються вже завантажена область, збережені номери будинків і базова мережа доріг.
+
+Акаунт не потрібен. Реклами немає. Трек поїздки не надсилається розробнику. Історія і карти лежать лише на вашому iPhone.
+
+Navi не керує автомобілем. Знаки, світлофори і правила важливіші за лінію на екрані.
+
+Питання: uu36548@gmail.com
+Політика приватності: https://diimas666.github.io/navi/privacy.html
+
+
+========== РУССКИЙ ==========
+
+Название: Navi
+Подзаголовок (30): Навигатор по Украине офлайн
+
+Рекламный текст (170):
+Офлайн-навигатор по Украине: маршрут по улицам, номера домов и карты областей в телефоне. Работает с интернетом и без.
+
+Ключевые слова (100):
+навигатор,офлайн,украина,карты,gps,маршрут,одесса,киев,голос,дома
+
+Что нового:
+Первый публичный выпуск. Маршрут по улицам Украины, номера домов на карте, офлайн-области, голос и ведение с интернетом и без него.
+
+Описание:
+Navi — навигатор для поездок по Украине. Ищете адрес, видите маршрут по улицам и едете. Карты областей сохраняются в телефоне, поэтому без сети вы не остаётесь без карты.
+
+Что умеет
+• Поиск улицы, дома, места и точки из буфера
+• Маршрут по дорогам, не сквозь дворы и дома
+• Номера домов на карте, когда приближаете
+• Голосовые подсказки поворотов
+• Дом, работа и свои адреса в одно касание
+• Загрузка области: Одесса, Киев, Львов и другие
+• Ведение при слабом GPS: оценка по датчикам телефона и, если есть, скорости с OBD-II
+
+С интернетом Navi берёт живой маршрут и поиск. Без интернета остаются уже загруженная область, сохранённые номера домов и базовая сеть дорог.
+
+Аккаунт не нужен. Рекламы нет. Трек поездки разработчику не отправляется. История и карты лежат только на вашем iPhone.
+
+Navi не управляет автомобилем. Знаки, светофоры и правила важнее линии на экране.
+
+Вопросы: uu36548@gmail.com
+Политика конфиденциальности: https://diimas666.github.io/navi/privacy.html
+
+
+========== ENGLISH (для рев’ю Apple) ==========
+
+Name: Navi
+Subtitle (30): Offline Ukraine navigator
+
+Promotional text (170):
+Offline navigator for Ukraine: street routes, house numbers and regional maps on the phone. Works online and offline.
+
+Keywords (100):
+navigator,offline,ukraine,maps,gps,route,odessa,kyiv,voice,driving
+
+What's New:
+First public release. Street routing in Ukraine, house numbers on the map, offline regions, voice guidance — online and offline.
+
+Description:
+Navi is a navigator for driving in Ukraine. Search an address, see a route that follows streets, and go. Regional maps stay on the phone, so you keep the map when the network drops.
+
+What it does
+• Search streets, house numbers, places, and a point from the clipboard
+• Routes on roads, not through yards and buildings
+• House numbers on the map when you zoom in
+• Spoken turn guidance
+• Home, work, and saved places in one tap
+• Download a region: Odesa, Kyiv, Lviv, and others
+• Guidance when GPS is weak, using phone sensors and optional OBD-II speed
+
+Online, Navi uses live routing and search. Offline, you keep the downloaded region, saved house numbers, and the base road network.
+
+No account. No ads. The trip track is not sent to the developer. History and maps stay on your iPhone.
+
+Navi does not drive the car. Signs, lights, and traffic rules come first.
+
+Support: uu36548@gmail.com
+Privacy: https://diimas666.github.io/navi/privacy.html
