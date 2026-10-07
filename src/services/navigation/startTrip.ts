@@ -13,6 +13,7 @@ import {distanceToRoute, shouldRebuild} from './offRoute';
 import {keepDistinctRoutes, dropPassedStops, isAirLine, rankRoutes} from './routeChoice';
 import {useSettingsStore} from '../../store/settingsStore';
 import {matchesStreet} from '../maps/addressQuery';
+import {snapPlaceToHouse} from '../maps/houses';
 import {planThroughStops} from './joinPlans';
 
 export type TripStart = 'ok' | 'denied' | 'failed' | 'missing';
@@ -43,6 +44,7 @@ export async function startTripTo(
   origin?: {latitude: number; longitude: number} | null,
 ): Promise<TripStart> {
   const session = useSessionStore.getState();
+  place = snapPlaceToHouse(place);
   const here = await hereNow();
   const originLat = here?.latitude ?? session.displayLatitude ?? origin?.latitude ?? null;
   const originLon = here?.longitude ?? session.displayLongitude ?? origin?.longitude ?? null;
@@ -296,7 +298,7 @@ function reachHouse(plan: RoutePlan, latitude: number, longitude: number): Route
     return plan;
   }
   const gap = haversineMeters(last[1], last[0], latitude, longitude);
-  if (gap < 25 || gap > 90) {
+  if (gap < 18 || gap > 220) {
     return plan;
   }
   return {

@@ -2,6 +2,7 @@ import {Platform} from 'react-native';
 
 import {GOOGLE_MAPS_KEY} from '../../constants/googleMapsKey';
 import type {Place} from '../../models/domain';
+import {wantedHouse} from './addressQuery';
 
 type Bias = {latitude: number; longitude: number};
 
@@ -51,6 +52,9 @@ export async function googleSuggest(query: string, language: 'uk' | 'ru', bias: 
     sessiontoken: session,
     key: GOOGLE_MAPS_KEY,
   });
+  if (wantedHouse(text)) {
+    params.set('types', 'address');
+  }
   if (bias) {
     const spot = `${bias.latitude.toFixed(5)},${bias.longitude.toFixed(5)}`;
     params.set('location', spot);

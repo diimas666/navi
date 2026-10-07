@@ -1,4 +1,5 @@
 import type {Place} from '../../models/domain';
+import {haversineMeters} from '../../utils/geo';
 import {matchesStreet, sameHouse, wantedHouse} from './addressQuery';
 
 export type HousePoint = {
@@ -36,7 +37,7 @@ export function addHouses(next: HousePoint[]): void {
   byStreet = null;
 }
 
-export function housesNear(latitude: number, longitude: number, span = 0.012): HousePoint[] {
+export function housesNear(latitude: number, longitude: number, span = 0.02): HousePoint[] {
   const found: HousePoint[] = [];
   houses.forEach(house => {
     if (Math.abs(house.latitude - latitude) <= span && Math.abs(house.longitude - longitude) <= span) {
@@ -80,6 +81,42 @@ export function searchDownloadedHouses(query: string): Place[] {
     }
   }
   return places;
+}
+
+/** Move a search hit onto the actual OSM house when the typed number is nearby. */
+export function snapPlaceToHouse(place: Place, query = place.name): Place {
+  const wanted = wantedHouse(query) ?? wantedHouse(place.name);
+  if (!wanted || !Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) {
+    return place;
+  }
+  let best: HousePoint | null = null;
+  let bestM = 420;
+  for (const house of housesNear(place.latitude, place.longitude, 0.006)) {
+    if (!sameHouse(house.house, wanted)) {
+      continue;
+    }
+    if (place.kind === 'street' || place.kind === 'house' || place.kind === 'address') {
+      if (!matchesStreet(house.street, query) && !matchesStreet(house.street, place.name)) {
+        continue;
+      }
+    }
+    const away = haversineMeters(place.latitude, place.longitude, house.latitude, house.longitude);
+    if (away >= bestM) {
+      continue;
+    }
+    best = house;
+    bestM = away;
+  }
+  if (!best) {
+    return place;
+  }
+  return {
+    ...place,
+    kind: 'house',
+    latitude: best.latitude,
+    longitude: best.longitude,
+    name: [best.street, best.house, best.city].filter(part => part.length > 0).join(', '),
+  };
 }
 
 export function splitBounds(bounds: Bounds): Bounds[] {

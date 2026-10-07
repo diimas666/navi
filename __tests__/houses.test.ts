@@ -1,4 +1,11 @@
-import {parseAddressPayload, replaceHouses, searchDownloadedHouses, splitBounds, boundsArea} from '../src/services/maps/houses';
+import {
+  parseAddressPayload,
+  replaceHouses,
+  searchDownloadedHouses,
+  snapPlaceToHouse,
+  splitBounds,
+  boundsArea,
+} from '../src/services/maps/houses';
 import {searchPlaces} from '../src/services/maps/Geocoder';
 
 test('every explicit house number is kept', () => {
@@ -64,5 +71,25 @@ test('downloaded house search returns that exact address', () => {
   expect(found[0]?.latitude).toBe(46.484);
   expect(searchPlaces('Дерибасівська 10')[0]?.kind).toBe('house');
   expect(searchPlaces('киев').some(place => place.name === 'Київ')).toBe(true);
+  replaceHouses([]);
+});
+
+test('a street pin snaps onto the typed house when it is nearby', () => {
+  replaceHouses([
+    {street: 'Люстдорфська дорога', house: '86', city: 'Одеса', latitude: 46.4249, longitude: 30.7261},
+  ]);
+  const snapped = snapPlaceToHouse(
+    {
+      id: 'street',
+      name: 'Люстдорфська дорога',
+      latitude: 46.4255,
+      longitude: 30.7268,
+      kind: 'street',
+    },
+    'Люстдорфська 86',
+  );
+  expect(snapped.kind).toBe('house');
+  expect(snapped.latitude).toBe(46.4249);
+  expect(snapped.longitude).toBe(30.7261);
   replaceHouses([]);
 });

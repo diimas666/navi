@@ -28,7 +28,6 @@ export type SettingsState = {
   mapCoach: boolean;
   coachSeen: boolean;
   voice: boolean;
-  satelliteMap: boolean;
   routePref: 'faster' | 'shorter' | 'noHighway';
   calibration: CalibrationRecord | null;
   setHydrated: (value: boolean) => void;
@@ -51,7 +50,6 @@ export type SettingsState = {
   setMapCoach: (value: boolean) => void;
   setCoachSeen: (value: boolean) => void;
   setVoice: (value: boolean) => void;
-  setSatelliteMap: (value: boolean) => void;
   setRoutePref: (value: 'faster' | 'shorter' | 'noHighway') => void;
   setCalibration: (value: CalibrationRecord) => void;
   clearCalibration: () => void;
@@ -80,7 +78,6 @@ export const useSettingsStore = create<SettingsState>(set => ({
   mapCoach: false,
   coachSeen: false,
   voice: true,
-  satelliteMap: true,
   routePref: 'shorter',
   calibration: null,
   setHydrated: hydrated => set({hydrated}),
@@ -103,7 +100,6 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setMapCoach: mapCoach => set({mapCoach}),
   setCoachSeen: coachSeen => set({coachSeen}),
   setVoice: voice => set({voice}),
-  setSatelliteMap: satelliteMap => set({satelliteMap}),
   setRoutePref: routePref => set({routePref}),
   setCalibration: calibration =>
     set(state => {

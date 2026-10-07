@@ -129,7 +129,6 @@ export function NaviMap({
   const mapMode = nightMap ? 'dark' : mode;
   const language = useSettingsStore(state => state.language);
   const placeIcons = useSettingsStore(state => state.placeIcons);
-  const satelliteMap = useSettingsStore(state => state.satelliteMap);
   const copy = uiCopy(language);
   const cameraRef = useRef<CameraRef>(null);
   const lastCameraMove = useRef(0);
@@ -276,13 +275,13 @@ export function NaviMap({
     const [latText, lonText] = streetKey.split(':');
     const lat = Number(latText);
     const lon = Number(lonText);
-    const ranked = housesNear(lat, lon)
+    const ranked = housesNear(lat, lon, 0.02)
       .map(house => ({
         house,
         offset: Math.abs(house.latitude - lat) + Math.abs(house.longitude - lon),
       }))
       .sort((left, right) => left.offset - right.offset)
-      .slice(0, 500);
+      .slice(0, 1400);
     return {
       type: 'FeatureCollection' as const,
       features: ranked.map(({house}, index) => ({
@@ -554,6 +553,26 @@ export function NaviMap({
             }}
           />
         ) : null}
+        <Layer
+          id="tile-housenumbers"
+          type="symbol"
+          source="openmaptiles"
+          source-layer="housenumber"
+          minzoom={15}
+          layout={{
+            'text-field': ['to-string', ['coalesce', ['get', 'housenumber'], ['get', 'name']]],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 17, 13, 19, 16],
+            'text-padding': 1,
+            'text-allow-overlap': false,
+            'text-ignore-placement': false,
+          }}
+          paint={{
+            'text-color': mapMode === 'dark' ? '#F0ECF8' : '#3A3348',
+            'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#FFFFFF',
+            'text-halo-width': 1.6,
+          }}
+        />
         {localStreets.features.length > 0 ? (
           <GeoJSONSource id="local-streets" data={localStreets}>
             <Layer
@@ -572,18 +591,20 @@ export function NaviMap({
             <Layer
               id="house-number-labels"
               type="symbol"
-              minzoom={15}
+              minzoom={14}
               layout={{
                 'text-field': ['get', 'house'],
                 'text-font': ['Noto Sans Regular'],
-                'text-size': 11,
-                'text-allow-overlap': false,
-                'text-padding': 2,
+                'text-size': 13,
+                'text-allow-overlap': true,
+                'text-ignore-placement': true,
+                'text-optional': false,
+                'text-padding': 1,
               }}
               paint={{
-                'text-color': mapMode === 'dark' ? '#F4F0FF' : '#3A3348',
-                'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#F7F4EE',
-                'text-halo-width': 1.4,
+                'text-color': mapMode === 'dark' ? '#F4F0FF' : '#2A2438',
+                'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#FFFFFF',
+                'text-halo-width': 1.8,
               }}
             />
           </GeoJSONSource>
@@ -787,8 +808,12 @@ export function NaviMap({
             showUser={!pinned && located}
             placeIcons={placeIcons}
             nearby={nearby}
+            houses={houseMarks.features.map(item => ({
+              house: String(item.properties.house),
+              latitude: item.geometry.coordinates[1],
+              longitude: item.geometry.coordinates[0],
+            }))}
             night={mapMode === 'dark'}
-            satellite={satelliteMap && !offlineMap}
             onUserMove={onUserMove}
             onGesture={onGesture}
             onLook={(lookLatitude, lookLongitude, lookZoom) => {

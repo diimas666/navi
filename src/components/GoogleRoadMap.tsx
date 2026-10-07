@@ -32,8 +32,8 @@ type Props = {
   showUser: boolean;
   placeIcons: boolean;
   nearby: NearbyPlace[];
+  houses?: Array<{house: string; latitude: number; longitude: number}>;
   night?: boolean;
-  satellite?: boolean;
   onUserMove?: (zoom: number) => void;
   onGesture?: (holding: boolean, zoom: number) => void;
   onLook?: (latitude: number, longitude: number, zoom: number) => void;
@@ -62,8 +62,8 @@ export function GoogleRoadMap({
   showUser,
   placeIcons,
   nearby,
+  houses = [],
   night = false,
-  satellite = false,
   onUserMove,
   onGesture,
   onLook,
@@ -98,8 +98,6 @@ export function GoogleRoadMap({
   placeIconsRef.current = placeIcons;
   const nightRef = useRef(night);
   nightRef.current = night;
-  const satelliteRef = useRef(satellite);
-  satelliteRef.current = satellite;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -135,12 +133,12 @@ export function GoogleRoadMap({
     send(`window.navi.places(${placeIconsRef.current ? 1 : 0},${nightRef.current ? 1 : 0})`);
   };
 
-  const pushLayer = () => {
-    send(`window.navi.layer(${satelliteRef.current ? 1 : 0})`);
-  };
-
   const pushMarks = () => {
     send(`window.navi.marks(${JSON.stringify(nearby)})`);
+  };
+
+  const pushHouses = () => {
+    send(`window.navi.houses(${JSON.stringify(houses)})`);
   };
 
   const pushRoute = () => {
@@ -171,17 +169,21 @@ export function GoogleRoadMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeIcons, night]);
 
-  useEffect(() => {
-    pushLayer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [satellite]);
-
   const marksKey = nearby.map(item => item.id).join(',');
   useEffect(() => {
     pushMarks();
     // marksKey covers the nearby payload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marksKey]);
+
+  const housesKey = houses
+    .slice(0, 8)
+    .map(item => `${item.house}:${item.latitude.toFixed(4)}`)
+    .join('|') + `:${houses.length}`;
+  useEffect(() => {
+    pushHouses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [housesKey]);
 
   const stopsKey = stops.map(item => `${item.latitude},${item.longitude}`).join('|');
   const routeKey = `${route?.distanceM ?? 0}:${route?.coordinates.length ?? 0}:${alternatives.length}:${destination?.latitude ?? ''}:${destination?.longitude ?? ''}:${destination?.name ?? ''}:${stopsKey}:${routeColor}:${fitToken}:${tracking ? 1 : 0}`;
@@ -214,8 +216,8 @@ export function GoogleRoadMap({
       pushView();
       pushRoute();
       pushPlaces();
-      pushLayer();
       pushMarks();
+      pushHouses();
       return;
     }
     if (data.type === 'fail') {
@@ -309,13 +311,17 @@ function initMap(){
         {featureType: 'poi.government', stylers: [{visibility: 'on'}]},
         {featureType: 'transit', stylers: [{visibility: 'on'}]},
         {featureType: 'transit.station', stylers: [{visibility: 'on'}]},
-        {featureType: 'administrative.neighborhood', stylers: [{visibility: 'on'}]}
+        {featureType: 'administrative.neighborhood', stylers: [{visibility: 'on'}]},
+        {featureType: 'road', elementType: 'labels', stylers: [{visibility: 'on'}]},
+        {featureType: 'road', elementType: 'labels.text', stylers: [{visibility: 'on'}]}
       ];
     }
     return [
       {featureType: 'poi', stylers: [{visibility: 'off'}]},
       {featureType: 'transit.station', stylers: [{visibility: 'off'}]},
-      {featureType: 'administrative.neighborhood', stylers: [{visibility: 'on'}]}
+      {featureType: 'administrative.neighborhood', stylers: [{visibility: 'on'}]},
+      {featureType: 'road', elementType: 'labels', stylers: [{visibility: 'on'}]},
+      {featureType: 'road', elementType: 'labels.text', stylers: [{visibility: 'on'}]}
     ];
   }
   function nightStyle(){
@@ -331,7 +337,8 @@ function initMap(){
   }
   var placesOn = ${placeIcons ? 'true' : 'false'};
   var darkOn = false;
-  var satelliteOn = false;
+  var houseItems = [];
+  var houseMarks = [];
   var map = new google.maps.Map(document.getElementById('map'), {
     center: {lat: ${latitude}, lng: ${longitude}},
     zoom: ${zoom},
@@ -464,24 +471,13 @@ function initMap(){
       if (!used) return;
       map.fitBounds(bounds, {top: 120, right: 48, bottom: 280, left: 48});
     },
-    layer: function(on){
-      satelliteOn = !!on;
-      if (satelliteOn) {
-        map.setMapTypeId('hybrid');
-        map.setOptions({styles: []});
-        return;
-      }
-      map.setMapTypeId('roadmap');
-      map.setOptions({styles: placeStyle(placesOn).concat(darkOn ? nightStyle() : [])});
+    houses: function(items){
+      houseItems = items || [];
+      refreshHouses();
     },
     places: function(on, dark){
       placesOn = !!on;
       darkOn = !!dark;
-      if (satelliteOn) {
-        map.setOptions({clickableIcons: placesOn, styles: []});
-        if (!placesOn) window.navi.marks([]);
-        return;
-      }
       map.setOptions({clickableIcons: placesOn, styles: placeStyle(placesOn).concat(darkOn ? nightStyle() : [])});
       if (!placesOn) window.navi.marks([]);
     },
@@ -529,6 +525,27 @@ function initMap(){
     });
   }
   cityLabels.forEach(function(item){ cityMarks.push(makeLabel(item, '13px', '#3F4654')); });
+  function refreshHouses(){
+    houseMarks.forEach(function(item){ item.setMap(null); });
+    houseMarks = [];
+    var z = map.getZoom() || 0;
+    var bounds = map.getBounds();
+    if (z < 14 || !bounds) return;
+    var size = z >= 16.4 ? '13px' : '11px';
+    houseItems.forEach(function(item){
+      if (houseMarks.length >= 450) return;
+      if (!item || item.latitude == null || item.longitude == null) return;
+      if (!bounds.contains({lat: item.latitude, lng: item.longitude})) return;
+      houseMarks.push(new google.maps.Marker({
+        map: map,
+        position: {lat: item.latitude, lng: item.longitude},
+        clickable: false,
+        icon: blankIcon(),
+        label: {text: String(item.house || ''), color: '#2A2438', fontSize: size, fontWeight: '800'},
+        zIndex: 2
+      }));
+    });
+  }
   function refreshLabels(){
     var z = map.getZoom() || 0;
     var bounds = map.getBounds();
@@ -537,14 +554,16 @@ function initMap(){
     });
     hoodMarks.forEach(function(mark){ mark.setMap(null); });
     hoodMarks = [];
-    if (!bounds || z < 12.2 || z > 17) return;
-    hoodLabels.forEach(function(item){
-      if (hoodMarks.length >= 36) return;
-      if (!bounds.contains({lat: item.lat, lng: item.lon})) return;
-      var mark = makeLabel(item, '12px', '#5A6270');
-      mark.setVisible(true);
-      hoodMarks.push(mark);
-    });
+    if (bounds && z >= 12.2 && z <= 17) {
+      hoodLabels.forEach(function(item){
+        if (hoodMarks.length >= 36) return;
+        if (!bounds.contains({lat: item.lat, lng: item.lon})) return;
+        var mark = makeLabel(item, '12px', '#5A6270');
+        mark.setVisible(true);
+        hoodMarks.push(mark);
+      });
+    }
+    refreshHouses();
   }
   map.addListener('dragstart', function(){
     dragging = true;

@@ -24,9 +24,6 @@ type Props = {
   onHeading: () => void;
   onNorth: () => void;
   onAlong?: () => void;
-  satellite?: boolean;
-  online?: boolean;
-  onSatellite?: () => void;
 };
 
 export function MapControls({
@@ -45,9 +42,6 @@ export function MapControls({
   onHeading,
   onNorth,
   onAlong,
-  satellite = false,
-  online = false,
-  onSatellite,
 }: Props) {
   const {colors} = useTheme();
   const voice = useSettingsStore(state => state.voice);
@@ -90,17 +84,6 @@ export function MapControls({
             <Text style={styles.dimensionLabel}>{buildings3d ? '3D' : '2D'}</Text>
           </Pressable>
         ) : null}
-        {online && onSatellite ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={satellite ? copy.roadsMap : copy.satellite}
-            onPress={onSatellite}
-            style={[styles.dimension, satellite ? styles.dimensionOn : null]}>
-            <Text style={[styles.dimensionLabel, satellite ? styles.dimensionOnLabel : null]}>
-              {satellite ? copy.roadsMap : copy.satellite}
-            </Text>
-          </Pressable>
-        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={voiceLabel}
@@ -134,17 +117,6 @@ export function MapControls({
         style={[styles.button, {backgroundColor: follow ? colors.accent : colors.glass}]}>
         <Text style={{color: follow ? colors.onAccent : colors.textPrimary}}>{follow ? '↑' : 'N'}</Text>
       </Pressable>
-      {online && onSatellite ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={satellite ? copy.roadsMap : copy.satellite}
-          onPress={onSatellite}
-          style={[styles.button, {backgroundColor: satellite ? colors.accent : colors.glass}]}>
-          <Text style={{color: satellite ? colors.onAccent : colors.textPrimary, fontSize: 11, fontWeight: '800'}}>
-            {satellite ? copy.roadsMap : copy.satellite}
-          </Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -249,9 +221,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: {width: 0, height: 3},
   },
-  dimensionLabel: {color: '#1C1430', fontSize: 13, fontWeight: '800', letterSpacing: 0.2},
-  dimensionOn: {backgroundColor: '#149C96'},
-  dimensionOnLabel: {color: '#FFFFFF'},
+  dimensionLabel: {color: '#1C1430', fontSize: 16, fontWeight: '800', letterSpacing: 0.4},
   speakerButton: {
     width: 64,
     height: 64,

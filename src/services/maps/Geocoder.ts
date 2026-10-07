@@ -6,7 +6,7 @@ import {useSettingsStore} from '../../store/settingsStore';
 import {haversineMeters} from '../../utils/geo';
 import {routingGraph} from '../roads/RegionGraph';
 import {AppError} from '../errors/AppError';
-import {searchDownloadedHouses} from './houses';
+import {searchDownloadedHouses, snapPlaceToHouse} from './houses';
 import {placeFix} from '../navigation/placeFix';
 import {googleSearchReady, googleSuggest} from './googlePlaces';
 import {matchesStreet, normalizeAddress, parseAddress, queryVariants, sameHouse, streetKey, wantedHouse} from './addressQuery';
@@ -128,7 +128,7 @@ export function orderPlaces(places: Place[], bias: Bias | null, query = ''): Pla
 }
 
 export function suggestPlacesNow(query: string): Place[] {
-  return orderPlaces(searchPlaces(query), viewerBias(), query);
+  return orderPlaces(searchPlaces(query), viewerBias(), query).map(place => snapPlaceToHouse(place, query));
 }
 
 /** True when the phone is not known to be offline, so Google can answer. */
@@ -142,12 +142,16 @@ export async function suggestPlaces(query: string): Promise<Place[]> {
   if (query.trim().length < 2) {
     return orderPlaces(local, bias, query);
   }
+  const houses = local.filter(place => place.kind === 'house').map(place => snapPlaceToHouse(place, query));
+  if (houses.length > 0) {
+    return orderPlaces(houses, bias, query);
+  }
   if (googleSearchOn()) {
     try {
       const language = resolveLanguage(useSettingsStore.getState().language);
       const google = await googleSuggest(query, language, bias);
       if (google.length > 0) {
-        return google;
+        return google.map(place => snapPlaceToHouse(place, query));
       }
       return orderPlaces(local, bias, query);
     } catch {
