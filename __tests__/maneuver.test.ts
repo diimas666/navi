@@ -40,6 +40,14 @@ test('passed road is dropped from the remaining line', () => {
   expect(progressAlong(line, 46.48, 30.73)).toBeGreaterThan(700);
 });
 
+test('progress along a long line stays correct after a hint', () => {
+  const long: Array<[number, number]> = Array.from({length: 400}, (_, index) => [30.7 + index * 0.001, 46.48]);
+  const early = progressAlong(long, 46.48, 30.72);
+  const later = progressAlong(long, 46.48, 30.9);
+  expect(later).toBeGreaterThan(early + 10_000);
+  expect(progressAlong(long, 46.48, 30.71)).toBeLessThan(later);
+});
+
 test('a side street rebuilds without waiting for highway speed', () => {
   expect(shouldRebuild(50, 1.2, 4_000)).toBe(true);
   expect(shouldRebuild(90, 0, 7_000)).toBe(true);

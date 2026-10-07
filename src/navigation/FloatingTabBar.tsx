@@ -3,30 +3,25 @@ import {useEffect, useRef, useState} from 'react';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
 
 import {useSessionStore} from '../store/sessionStore';
+import {useTheme} from '../theme/ThemeProvider';
 
-const active = '#178F8A';
-const idle = '#1A1A1A';
-const selectedFill = '#F1F1F3';
 const HUD_HIDE_MS = 20_000;
 const HUD_SLIDE = 120;
 
+export function tabBarCanHide(driving: boolean, tab: string | undefined): boolean {
+  return driving && tab === 'Map';
+}
+
 export function FloatingTabBar({state, descriptors, navigation, insets}: BottomTabBarProps) {
+  const {colors} = useTheme();
   const driving = useSessionStore(store => store.driving);
   const wake = useSessionStore(store => store.hudWake);
+  const tab = state.routes[state.index]?.name;
+  const canHide = tabBarCanHide(driving, tab);
   const [shown, setShown] = useState(true);
   const hide = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!driving) {
-      setShown(true);
-      Animated.timing(hide, {
-        toValue: 0,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-      return;
-    }
     setShown(true);
     Animated.timing(hide, {
       toValue: 0,
@@ -34,6 +29,9 @@ export function FloatingTabBar({state, descriptors, navigation, insets}: BottomT
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
+    if (!canHide) {
+      return;
+    }
     const timer = setTimeout(() => {
       setShown(false);
       Animated.timing(hide, {
@@ -44,11 +42,11 @@ export function FloatingTabBar({state, descriptors, navigation, insets}: BottomT
       }).start();
     }, HUD_HIDE_MS);
     return () => clearTimeout(timer);
-  }, [driving, hide, wake]);
+  }, [canHide, hide, wake]);
 
   return (
     <Animated.View
-      pointerEvents={driving && !shown ? 'none' : 'box-none'}
+      pointerEvents={canHide && !shown ? 'none' : 'box-none'}
       style={[
         styles.wrap,
         {
@@ -57,11 +55,12 @@ export function FloatingTabBar({state, descriptors, navigation, insets}: BottomT
           transform: [{translateY: hide.interpolate({inputRange: [0, 1], outputRange: [0, HUD_SLIDE]})}],
         },
       ]}>
-      <View style={styles.pill}>
+      <View style={[styles.pill, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
         {state.routes.map((route, index) => {
           const focused = state.index === index;
-          const tint = focused ? active : idle;
+          const tint = focused ? colors.accent : colors.textPrimary;
           const title = descriptors[route.key].options.title ?? route.name;
+          const cutout = focused ? colors.surfaceMuted : colors.surface;
           return (
             <Pressable
               key={route.key}
@@ -77,8 +76,8 @@ export function FloatingTabBar({state, descriptors, navigation, insets}: BottomT
                   navigation.navigate(route.name);
                 }
               }}
-              style={[styles.item, focused ? styles.itemOn : null]}>
-              <TabGlyph name={route.name} color={tint} cutout={focused ? selectedFill : '#FFFFFF'} />
+              style={[styles.item, focused ? [styles.itemOn, {backgroundColor: colors.surfaceMuted}] : null]}>
+              <TabGlyph name={route.name} color={tint} cutout={cutout} />
               <Text
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -151,15 +150,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     alignItems: 'center',
+    zIndex: 50,
+    elevation: 50,
   },
   pill: {
     width: 340,
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     borderRadius: 34,
     paddingVertical: 6,
     paddingHorizontal: 6,
-    shadowColor: '#1C1430',
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: {width: 0, height: 6},
@@ -174,7 +173,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
   },
   itemOn: {
-    backgroundColor: selectedFill,
+    backgroundColor: 'transparent',
   },
   label: {
     fontSize: 13,

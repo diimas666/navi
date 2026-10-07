@@ -70,10 +70,10 @@ export function matchesStreet(resultStreet: string, query: string): boolean {
   const parsed = parseAddress(query);
   const got = streetKey(resultStreet);
   const needle = streetKey(parsed.street || query);
-  if (got.length < 3 || needle.length < 3) {
+  if (got.length < 2 || needle.length < 2) {
     return false;
   }
-  if (got.includes(needle) || needle.includes(got)) {
+  if (got.includes(needle) || needle.includes(got) || got.startsWith(needle)) {
     return true;
   }
   return needle.length >= 6 && got.length >= 6 && editDistance(needle, got) <= 1;

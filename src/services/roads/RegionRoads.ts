@@ -4,7 +4,14 @@ import type {RegionDefinition} from '../../constants/map';
 import type {RoadNetwork} from '../../models/domain';
 import {jsonTooBig, readBoundedJson} from '../jsonLimit';
 import {boundsArea, splitBounds, tileId, type Bounds} from '../maps/houses';
-import {highwayFilter, parseOverpass, setRegionNetworks, waysToNetwork} from './RegionGraph';
+import {
+  highwayFilter,
+  parseOverpass,
+  setRegionNetworks,
+  shouldSplitStreetTile,
+  streetTileIncludesService,
+  waysToNetwork,
+} from './RegionGraph';
 import {
   DownloadPaused,
   downloadGeneration,
@@ -13,11 +20,13 @@ import {
   throwIfPaused,
   trackAbort,
 } from '../maps/downloadPause';
+import {mapLimit, withOverpass} from '../maps/overpassGate';
 
 const KEY = 'neiv.region-roads.v1';
 const TILE_KEY = 'neiv.region-roads.v2';
 const ENDPOINTS = [
   'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
 ];
 
@@ -90,17 +99,33 @@ async function downloadStreetTiles(
   const seeds = tilesUnder(bounds, STREET_TILE_AREA);
   const stamp = downloadGeneration();
   let failed = false;
+  let writes = 0;
+  let persist = Promise.resolve();
+  const flushManifest = (complete: boolean) => {
+    persist = persist.then(() => {
+      manifest[region.id] = {tiles: Array.from(done), complete};
+      return AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
+    });
+    return persist;
+  };
+  const noteTile = () => {
+    writes += 1;
+    return writes % 4 === 0 ? flushManifest(false) : Promise.resolve();
+  };
   onProgress?.(done.size, seeds.length);
-  for (const seed of seeds) {
-    throwIfPaused(stamp);
-    const saved = await walk(seed, 0);
-    if (!saved) {
-      failed = true;
-    }
-    onProgress?.(done.size, seeds.length);
+  let finished = false;
+  try {
+    const saved = await mapLimit(seeds, async seed => {
+      throwIfPaused(stamp);
+      const ok = await walk(seed, 0);
+      onProgress?.(done.size, seeds.length);
+      return ok;
+    });
+    failed = !saved;
+    finished = true;
+  } finally {
+    await flushManifest(finished && !failed);
   }
-  manifest[region.id] = {tiles: Array.from(done), complete: !failed};
-  await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
 
   async function walk(piece: Bounds, depth: number): Promise<boolean> {
     const id = tileId(piece);
@@ -108,12 +133,7 @@ async function downloadStreetTiles(
       return true;
     }
     if (boundsArea(piece) > STREET_TILE_AREA && depth < 8) {
-      let saved = true;
-      for (const part of splitBounds(piece)) {
-        const partSaved = await walk(part, depth + 1);
-        saved = saved && partSaved;
-      }
-      return saved;
+      return mapLimit(splitBounds(piece), part => walk(part, depth + 1));
     }
     try {
       throwIfPaused(stamp);
@@ -128,8 +148,7 @@ async function downloadStreetTiles(
       await AsyncStorage.setItem(streetTileKey(region.id, id), raw);
       done.add(id);
       onProgress?.(done.size, seeds.length);
-      manifest[region.id] = {tiles: Array.from(done), complete: false};
-      await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
+      await noteTile();
       return true;
     } catch (error) {
       if (isDownloadPaused(error)) {
@@ -138,12 +157,7 @@ async function downloadStreetTiles(
       if (depth >= 6 || boundsArea(piece) < 0.0004) {
         return false;
       }
-      let saved = true;
-      for (const part of splitBounds(piece)) {
-        const partSaved = await walk(part, depth + 1);
-        saved = saved && partSaved;
-      }
-      return saved;
+      return mapLimit(splitBounds(piece), part => walk(part, depth + 1));
     }
   }
 }
@@ -167,7 +181,8 @@ function tilesUnder(bounds: Bounds, maxArea: number): Bounds[] {
 
 async function fetchStreetTile(bounds: Bounds, region: RegionDefinition): Promise<RoadNetwork> {
   const box = `${bounds.south},${bounds.west},${bounds.north},${bounds.east}`;
-  const query = `[out:json][timeout:40];way["highway"~"^(${highwayFilter(region)})$"](${box});out geom;`;
+  const includeService = streetTileIncludesService(boundsArea(bounds));
+  const query = `[out:json][timeout:18];way["highway"~"^(${highwayFilter(region, includeService)})$"](${box});out geom qt;`;
   let lastError: unknown = new Error('streets unavailable');
   for (const endpoint of ENDPOINTS) {
     const stamp = downloadGeneration();
@@ -175,26 +190,24 @@ async function fetchStreetTile(bounds: Bounds, region: RegionDefinition): Promis
     try {
       const controller = new AbortController();
       const release = trackAbort(controller);
-      const timer = setTimeout(() => controller.abort(), 22_000);
+      const timer = setTimeout(() => controller.abort(), 28_000);
       try {
-        const response = await Promise.race([
-          fetch(endpoint, {
+        const payload = await withOverpass(async () => {
+          const response = await fetch(endpoint, {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Navi/1.0 (street graph)'},
             body: `data=${encodeURIComponent(query)}`,
             signal: controller.signal,
-          }),
-          new Promise<Response>((_, reject) => {
-            setTimeout(() => {
-              controller.abort();
-              reject(new Error('street tile timeout'));
-            }, 24_000);
-          }),
-        ]);
-        if (!response.ok) {
-          throw new Error(`streets ${response.status}`);
-        }
-        const payload = await readBoundedJson(response, undefined, () => controller.abort());
+          });
+          if (!response.ok) {
+            if (response.status === 429 || response.status === 502 || response.status === 504) {
+              await wait(1_800);
+            }
+            throw new Error(`streets ${response.status}`);
+          }
+          noteDownloadPulse();
+          return readBoundedJson(response, undefined, () => controller.abort());
+        });
         if (payload && typeof payload === 'object' && 'remark' in payload) {
           const remark = String((payload as {remark?: unknown}).remark ?? '');
           if (/timeout|timed out|runtime error|out of memory/i.test(remark)) {
@@ -211,9 +224,16 @@ async function fetchStreetTile(bounds: Bounds, region: RegionDefinition): Promis
         throw new DownloadPaused();
       }
       lastError = error;
+      if (shouldSplitStreetTile(error)) {
+        throw error;
+      }
     }
   }
   throw lastError;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function readRoadManifest(): Promise<RoadManifest> {

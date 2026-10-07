@@ -1,6 +1,7 @@
 import type {Place} from '../../models/domain';
+import {useSessionStore} from '../../store/sessionStore';
 import {haversineMeters} from '../../utils/geo';
-import {matchesStreet, sameHouse, wantedHouse} from './addressQuery';
+import {matchesStreet, sameHouse, streetKey, wantedHouse} from './addressQuery';
 
 export type HousePoint = {
   street: string;
@@ -8,6 +9,7 @@ export type HousePoint = {
   city: string;
   latitude: number;
   longitude: number;
+  entrance?: string;
 };
 
 export type Bounds = {
@@ -20,12 +22,16 @@ export type Bounds = {
 const MAX_INTERPOLATION_SPAN = 500;
 export const HOUSE_MEMORY_CAP = 30_000;
 
+const HOUSE_CELL = 0.02;
+
 let houses: HousePoint[] = [];
 let byStreet: Map<string, HousePoint[]> | null = null;
+let houseCells: Map<string, HousePoint[]> | null = null;
 
 export function replaceHouses(next: HousePoint[]): void {
   houses = dedupeHouses(next.slice(0, HOUSE_MEMORY_CAP));
   byStreet = null;
+  houseCells = null;
 }
 
 export function addHouses(next: HousePoint[]): void {
@@ -35,16 +41,48 @@ export function addHouses(next: HousePoint[]): void {
   const room = HOUSE_MEMORY_CAP - houses.length;
   houses = dedupeHouses([...houses, ...next.slice(0, room)]);
   byStreet = null;
+  houseCells = null;
 }
 
 export function housesNear(latitude: number, longitude: number, span = 0.02): HousePoint[] {
+  const cells = houseIndex();
   const found: HousePoint[] = [];
-  houses.forEach(house => {
-    if (Math.abs(house.latitude - latitude) <= span && Math.abs(house.longitude - longitude) <= span) {
-      found.push(house);
+  const lat0 = Math.floor((latitude - span) / HOUSE_CELL);
+  const lat1 = Math.floor((latitude + span) / HOUSE_CELL);
+  const lon0 = Math.floor((longitude - span) / HOUSE_CELL);
+  const lon1 = Math.floor((longitude + span) / HOUSE_CELL);
+  for (let latCell = lat0; latCell <= lat1; latCell += 1) {
+    for (let lonCell = lon0; lonCell <= lon1; lonCell += 1) {
+      const bucket = cells.get(`${latCell}:${lonCell}`);
+      if (!bucket) {
+        continue;
+      }
+      for (const house of bucket) {
+        if (Math.abs(house.latitude - latitude) <= span && Math.abs(house.longitude - longitude) <= span) {
+          found.push(house);
+        }
+      }
     }
-  });
+  }
   return found;
+}
+
+function houseIndex(): Map<string, HousePoint[]> {
+  if (houseCells) {
+    return houseCells;
+  }
+  const cells = new Map<string, HousePoint[]>();
+  for (const house of houses) {
+    const key = `${Math.floor(house.latitude / HOUSE_CELL)}:${Math.floor(house.longitude / HOUSE_CELL)}`;
+    const bucket = cells.get(key);
+    if (bucket) {
+      bucket.push(house);
+    } else {
+      cells.set(key, [house]);
+    }
+  }
+  houseCells = cells;
+  return cells;
 }
 
 export function searchDownloadedHouses(query: string): Place[] {
@@ -83,6 +121,80 @@ export function searchDownloadedHouses(query: string): Place[] {
   return places;
 }
 
+export function searchDownloadedStreets(query: string): Place[] {
+  const needle = streetKey(query);
+  if (needle.length < 2) {
+    return [];
+  }
+  const places: Place[] = [];
+  const seen = new Set<string>();
+  for (const [street, group] of streetIndex()) {
+    if (!matchesStreet(street, query)) {
+      continue;
+    }
+    const point = group.find(item => item.house) ?? group[0];
+    if (!point) {
+      continue;
+    }
+    const id = streetKey(street);
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    places.push({
+      id: `street-${id}`,
+      name: street,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      kind: 'street',
+    });
+  }
+  return places;
+}
+
+export function searchHousesOnStreet(street: string): Place[] {
+  const wanted = streetKey(street);
+  if (wanted.length < 2) {
+    return [];
+  }
+  const found = new Map<string, HousePoint>();
+  for (const [name, group] of streetIndex()) {
+    if (!matchesStreet(name, street) && streetKey(name) !== wanted) {
+      continue;
+    }
+    group.forEach(house => {
+      if (!house.house) {
+        return;
+      }
+      const key = house.house.toLowerCase();
+      const previous = found.get(key);
+      if (!previous || (house.entrance && !previous.entrance)) {
+        found.set(key, house);
+      }
+    });
+  }
+  return Array.from(found.values())
+    .sort((left, right) => houseOrder(left.house) - houseOrder(right.house))
+    .slice(0, 40)
+    .map(house => {
+      const door = nearestEntrance(house);
+      return {
+        id: `house-${door.latitude.toFixed(5)}:${door.longitude.toFixed(5)}:${door.house}`,
+        name: [door.street, door.house, door.entrance && door.entrance !== 'yes' ? `під'їзд ${door.entrance}` : null, door.city]
+          .filter(part => part && part.length > 0)
+          .join(', '),
+        latitude: door.latitude,
+        longitude: door.longitude,
+        kind: 'house' as const,
+      };
+    });
+}
+
+function houseOrder(value: string): number {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) ? number : Number.POSITIVE_INFINITY;
+}
+
 /** Move a search hit onto the actual OSM house when the typed number is nearby. */
 export function snapPlaceToHouse(place: Place, query = place.name): Place {
   const wanted = wantedHouse(query) ?? wantedHouse(place.name);
@@ -110,13 +222,45 @@ export function snapPlaceToHouse(place: Place, query = place.name): Place {
   if (!best) {
     return place;
   }
+  const door = nearestEntrance(best);
   return {
     ...place,
     kind: 'house',
-    latitude: best.latitude,
-    longitude: best.longitude,
-    name: [best.street, best.house, best.city].filter(part => part.length > 0).join(', '),
+    latitude: door.latitude,
+    longitude: door.longitude,
+    name: [door.street, door.house, door.entrance && door.entrance !== 'yes' ? `під'їзд ${door.entrance}` : null, door.city]
+      .filter(part => part && part.length > 0)
+      .join(', '),
   };
+}
+
+function nearestEntrance(house: HousePoint): HousePoint {
+  const session = useSessionStore.getState();
+  const fromLat = session.displayLatitude;
+  const fromLon = session.displayLongitude;
+  const doors = housesNear(house.latitude, house.longitude, 0.00045).filter(
+    item =>
+      sameHouse(item.house, house.house) &&
+      (matchesStreet(item.street, house.street) || streetKey(item.street) === streetKey(house.street)) &&
+      item.entrance,
+  );
+  if (doors.length === 0) {
+    return house;
+  }
+  const main = doors.find(item => item.entrance === 'main');
+  if (fromLat == null || fromLon == null) {
+    return main ?? doors[0];
+  }
+  let best = main ?? doors[0];
+  let bestM = haversineMeters(fromLat, fromLon, best.latitude, best.longitude);
+  doors.forEach(item => {
+    const away = haversineMeters(fromLat, fromLon, item.latitude, item.longitude);
+    if (away < bestM) {
+      best = item;
+      bestM = away;
+    }
+  });
+  return best;
 }
 
 export function splitBounds(bounds: Bounds): Bounds[] {
@@ -160,7 +304,87 @@ export function parseAddressPayload(payload: unknown): HousePoint[] {
       found.push(point);
     }
   });
-  return dedupeHouses(found);
+  found.push(...attachOrphanEntrances(elements, found));
+  return dedupeHouses(collapseNamedStreets(found));
+}
+
+function collapseNamedStreets(points: HousePoint[]): HousePoint[] {
+  const named = new Set<string>();
+  return points.filter(point => {
+    if (point.house) {
+      return true;
+    }
+    const key = streetKey(point.street);
+    if (!key || named.has(key)) {
+      return false;
+    }
+    named.add(key);
+    return true;
+  });
+}
+
+function attachOrphanEntrances(elements: OverpassElement[], houses: HousePoint[]): HousePoint[] {
+  const numbered = houses.filter(item => item.house.length > 0 && !item.entrance);
+  if (numbered.length === 0) {
+    return [];
+  }
+  const cell = 0.0004;
+  const cells = new Map<string, HousePoint[]>();
+  for (const house of numbered) {
+    const key = `${Math.floor(house.latitude / cell)}:${Math.floor(house.longitude / cell)}`;
+    const bucket = cells.get(key);
+    if (bucket) {
+      bucket.push(house);
+    } else {
+      cells.set(key, [house]);
+    }
+  }
+  const extras: HousePoint[] = [];
+  elements.forEach(element => {
+    const tags = element.tags ?? {};
+    if (!tags.entrance) {
+      return;
+    }
+    if (tags['addr:street'] && (tags['addr:housenumber'] || tags.ref)) {
+      return;
+    }
+    const latitude = element.lat ?? element.center?.lat;
+    const longitude = element.lon ?? element.center?.lon;
+    if (latitude == null || longitude == null) {
+      return;
+    }
+    let best: HousePoint | null = null;
+    let bestM = 42;
+    const lat0 = Math.floor(latitude / cell);
+    const lon0 = Math.floor(longitude / cell);
+    for (let latStep = -1; latStep <= 1; latStep += 1) {
+      for (let lonStep = -1; lonStep <= 1; lonStep += 1) {
+        const bucket = cells.get(`${lat0 + latStep}:${lon0 + lonStep}`);
+        if (!bucket) {
+          continue;
+        }
+        for (const house of bucket) {
+          const away = haversineMeters(latitude, longitude, house.latitude, house.longitude);
+          if (away < bestM) {
+            best = house;
+            bestM = away;
+          }
+        }
+      }
+    }
+    if (!best) {
+      return;
+    }
+    extras.push({
+      street: best.street,
+      house: best.house,
+      city: best.city,
+      latitude,
+      longitude,
+      entrance: tags.entrance || tags.ref || 'yes',
+    });
+  });
+  return extras;
 }
 
 export function dedupeHouses(points: HousePoint[]): HousePoint[] {
@@ -230,11 +454,15 @@ function mergeElement(previous: OverpassElement, next: OverpassElement): Overpas
 
 function pointFromElement(element: OverpassElement): HousePoint | null {
   const tags = element.tags ?? {};
-  const street = tags['addr:street'] ?? '';
-  const house = tags['addr:housenumber'] ?? '';
+  const namedWay = tags.name && tags.highway ? tags.name : '';
+  const street = tags['addr:street'] ?? namedWay;
+  const house = tags['addr:housenumber'] ?? (tags.entrance ? tags.ref || tags['addr:unit'] || '' : '');
   const latitude = element.lat ?? element.center?.lat;
   const longitude = element.lon ?? element.center?.lon;
-  if (!street || !house || latitude == null || longitude == null) {
+  if (!street || latitude == null || longitude == null) {
+    return null;
+  }
+  if (!house && !namedWay) {
     return null;
   }
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -246,6 +474,7 @@ function pointFromElement(element: OverpassElement): HousePoint | null {
     city: tags['addr:city'] ?? '',
     latitude,
     longitude,
+    entrance: tags.entrance || (house && tags.ref) || undefined,
   };
 }
 

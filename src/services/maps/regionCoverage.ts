@@ -113,6 +113,29 @@ export function coverageGapAhead(
   return null;
 }
 
+export type NeedDownloadView = {
+  busy: boolean;
+  percent: number;
+  detail: string | null;
+  error: string | null;
+};
+
+export function needDownloadView(
+  ids: string[],
+  regions: Record<string, {status?: string; progress?: number; detail?: string | null; error?: string | null}>,
+): NeedDownloadView {
+  if (ids.length === 0) {
+    return {busy: false, percent: 0, detail: null, error: null};
+  }
+  const states = ids.map(id => regions[id]);
+  const busy = states.some(state => state?.status === 'downloading');
+  const failed = states.find(state => state?.status === 'error');
+  const progress = states.reduce((sum, state) => sum + (state?.progress ?? 0), 0) / ids.length;
+  const percent = Math.max(busy ? 1 : 0, Math.min(99, Math.round(progress * 100)));
+  const detail = states.find(state => state?.status === 'downloading' && state.detail)?.detail ?? null;
+  return {busy, percent, detail, error: failed?.error ?? null};
+}
+
 export function formatRegionList(names: string[], language: 'uk' | 'ru'): string {
   if (names.length === 0) {
     return '';

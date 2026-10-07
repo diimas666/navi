@@ -1,23 +1,33 @@
-import {useState} from 'react';
-import {Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, View} from 'react-native';
+import {useRef, useState, type ComponentRef} from 'react';
+import {
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Switch,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import type {CompositeScreenProps} from '@react-navigation/native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
-import {
-  Card,
-  RangeBar,
-  SectionLabel,
-  SettingsRow,
-  settingsColors,
-} from '../components/settings/SettingsChrome';
+import {Card, RangeBar, SectionLabel, SettingsRow} from '../components/settings/SettingsChrome';
+import {APP_VERSION} from '../constants/app';
 import {resolveLanguage, settingsCopy} from '../i18n/settingsCopy';
 import type {MainTabParamList, RootStackParamList} from '../navigation/types';
 import {useObdStore} from '../store/obdStore';
 import {useSettingsStore} from '../store/settingsStore';
 import {useUiStore} from '../store/uiStore';
+import {useTheme} from '../theme/ThemeProvider';
 import {type} from '../theme/typography';
+
+type MenuAnchor = {x: number; y: number; width: number; height: number};
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Settings'>,
@@ -25,11 +35,27 @@ type Props = CompositeScreenProps<
 >;
 
 export function SettingsScreen({navigation}: Props) {
+  const {colors} = useTheme();
   const settings = useSettingsStore();
   const obdReady = useObdStore(state => state.state === 'ready');
   const [languageOpen, setLanguageOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
+  const languageRow = useRef<ComponentRef<typeof View>>(null);
+  const themeRow = useRef<ComponentRef<typeof View>>(null);
   const t = settingsCopy(resolveLanguage(settings.language));
+  const openMenu = (row: typeof languageRow, show: (open: boolean) => void) => {
+    const node = row.current;
+    if (!node) {
+      setMenuAnchor(null);
+      show(true);
+      return;
+    }
+    node.measureInWindow((x, y, width, height) => {
+      setMenuAnchor({x, y, width, height});
+      show(true);
+    });
+  };
   const languageName =
     settings.language === 'ru' ? t.russian : settings.language === 'system' ? t.likeSystem : t.ukrainian;
 
@@ -37,31 +63,34 @@ export function SettingsScreen({navigation}: Props) {
     Share.share({message: t.inviteMessage}).catch(() => undefined);
   };
   const writeSupport = (subject: string, body: string) => {
-    const note = `${body}\n${t.versionLine}\n${Platform.OS} ${Platform.Version}`;
+    const note = `${body}\n${t.version}: ${APP_VERSION}\n${Platform.OS} ${Platform.Version}`;
     const url = `mailto:uu36548@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(note)}`;
     Linking.openURL(url).catch(() => useUiStore.getState().showToast(t.mailFail));
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <Text style={styles.header}>{t.title}</Text>
+    <SafeAreaView style={[styles.screen, {backgroundColor: colors.background}]}>
+      <Text style={[styles.header, {color: colors.textPrimary}]}>{t.title}</Text>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.langHead}>
           <GlobeIcon />
-          <Text style={styles.langHeadText}>{t.language}</Text>
+          <Text style={[styles.langHeadText, {color: colors.textPrimary}]}>{t.language}</Text>
         </View>
         <Card>
-          <SettingsRow
-            title={t.language}
-            trailing={<Text style={styles.link}>{languageName}</Text>}
-            onPress={() => setLanguageOpen(true)}
-          />
-          <Text style={styles.note}>{t.permissionNote}</Text>
+          <View ref={languageRow} collapsable={false}>
+            <SettingsRow
+              title={t.language}
+              trailing={<Text style={[styles.link, {color: colors.accent}]}>{languageName}</Text>}
+              onPress={() => openMenu(languageRow, setLanguageOpen)}
+            />
+          </View>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.permissionNote}</Text>
         </Card>
         <ChoiceMenu
           open={languageOpen}
           value={settings.language}
           title={t.language}
+          anchor={menuAnchor}
           options={[
             {id: 'system', label: t.likeSystem},
             {id: 'uk', label: t.ukrainian},
@@ -78,29 +107,29 @@ export function SettingsScreen({navigation}: Props) {
         <Card>
           <SettingsRow
             title={obdReady ? t.adapterOn : t.adapterOff}
-            color={obdReady ? settingsColors.link : settingsColors.warn}
+            color={obdReady ? colors.accent : colors.warning}
             onPress={() => navigation.navigate('OBD')}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
-          <Text style={styles.note}>{t.adapterNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.adapterNote}</Text>
           <SettingsRow
             title={t.connectAdapter}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => navigation.navigate('OBD')}
           />
           <SettingsRow
             title={t.whichAdapters}
             detail={t.adapterDetail}
             onPress={() => navigation.navigate('Adapters')}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
         </Card>
 
         <IconHeading icon="map" title={t.mapSection} />
         <Card>
           <View style={styles.split}>
-            <Text style={styles.ink}>{t.autoReturn}</Text>
-            <Text style={styles.muted}>{settings.autoReturnSeconds} с</Text>
+            <Text style={[styles.ink, {color: colors.textPrimary}]}>{t.autoReturn}</Text>
+            <Text style={[styles.muted, {color: colors.textMuted}]}>{settings.autoReturnSeconds} с</Text>
           </View>
           <RangeBar
             min={2}
@@ -109,45 +138,50 @@ export function SettingsScreen({navigation}: Props) {
             value={settings.autoReturnSeconds}
             onChange={settings.setAutoReturnSeconds}
           />
-          <Text style={styles.note}>{t.autoReturnNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.autoReturnNote}</Text>
           <View style={styles.split}>
-            <Text style={styles.ink}>{t.keepZoom}</Text>
-            <Switch value={settings.keepManualZoom} onValueChange={settings.setKeepManualZoom} />
+            <Text style={[styles.ink, {color: colors.textPrimary}]}>{t.keepZoom}</Text>
+            <Switch
+              value={settings.keepManualZoom}
+              onValueChange={settings.setKeepManualZoom}
+              trackColor={{false: colors.border, true: colors.accent}}
+              thumbColor={colors.white}
+            />
           </View>
           <View style={styles.split}>
-            <Text style={styles.ink}>{t.baseZoom}</Text>
-            <Text style={styles.muted}>{settings.baseZoom}</Text>
+            <Text style={[styles.ink, {color: colors.textPrimary}]}>{t.baseZoom}</Text>
+            <Text style={[styles.muted, {color: colors.textMuted}]}>{settings.baseZoom}</Text>
           </View>
           <RangeBar min={12} max={18} step={1} value={settings.baseZoom} onChange={settings.setBaseZoom} />
-          <Text style={styles.note}>{t.zoomNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.zoomNote}</Text>
           <View style={styles.split}>
-            <Text style={styles.ink}>{t.placeIcons}</Text>
+            <Text style={[styles.ink, {color: colors.textPrimary}]}>{t.placeIcons}</Text>
             <Switch
               value={settings.placeIcons}
               onValueChange={settings.setPlaceIcons}
-              trackColor={{false: '#E4E5EA', true: '#20B2AA'}}
-              thumbColor="#FFFFFF"
+              trackColor={{false: colors.border, true: colors.accent}}
+              thumbColor={colors.white}
             />
           </View>
-          <Text style={styles.note}>{t.placeIconsNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.placeIconsNote}</Text>
         </Card>
 
         <SectionLabel title={t.mapsSection} />
         <Card>
           <SettingsRow
             title={t.regionMaps}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => navigation.navigate('Maps')}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
-          <Text style={styles.note}>{t.regionNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.regionNote}</Text>
         </Card>
 
         <SectionLabel title={t.againSection} />
         <Card>
           <SettingsRow
             title={t.showCoach}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => {
               settings.setMapCoach(true);
               navigation.navigate('Map');
@@ -155,13 +189,13 @@ export function SettingsScreen({navigation}: Props) {
           />
           <SettingsRow
             title={t.redo}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => {
               settings.setOnboarded(false);
               navigation.navigate('Onboarding');
             }}
           />
-          <Text style={styles.note}>{t.redoNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.redoNote}</Text>
         </Card>
 
         <IconHeading icon="lock" title={t.lockSection} />
@@ -172,7 +206,7 @@ export function SettingsScreen({navigation}: Props) {
             value={settings.autoLockParked}
             onChange={settings.setAutoLockParked}
           />
-          <Text style={styles.note}>{t.lockNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.lockNote}</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => {
@@ -181,7 +215,7 @@ export function SettingsScreen({navigation}: Props) {
             }}
             style={styles.hintRow}>
             <BulbIcon />
-            <Text style={styles.hintLabel}>{t.hints}</Text>
+            <Text style={[styles.hintLabel, {color: colors.accent}]}>{t.hints}</Text>
           </Pressable>
           <ToggleRow
             icon="unlock"
@@ -189,13 +223,13 @@ export function SettingsScreen({navigation}: Props) {
             value={settings.autoUnlockGps}
             onChange={settings.setAutoUnlockGps}
           />
-          <Text style={styles.note}>{t.unlockNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.unlockNote}</Text>
         </Card>
 
         <IconHeading icon="plane" title={t.gpsSection} />
         <Card>
           <ToggleRow icon="plane" title={t.gpsCheck} value={settings.gpsCheck} onChange={settings.setGpsCheck} />
-          <Text style={styles.note}>{t.gpsCheckNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.gpsCheckNote}</Text>
         </Card>
 
         <SectionLabel title={t.dataSection} />
@@ -204,7 +238,7 @@ export function SettingsScreen({navigation}: Props) {
             title={t.data}
             detail={t.dataDetail}
             onPress={() => navigation.navigate('Data')}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
         </Card>
 
@@ -212,9 +246,9 @@ export function SettingsScreen({navigation}: Props) {
         <Card>
           <Pressable accessibilityRole="button" onPress={() => settings.clearCalibration()} style={styles.resetRow}>
             <ResetIcon />
-            <Text style={styles.resetLabel}>{t.resetCal}</Text>
+            <Text style={[styles.resetLabel, {color: colors.danger}]}>{t.resetCal}</Text>
           </Pressable>
-          <Text style={styles.note}>{t.calNote}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.calNote}</Text>
         </Card>
 
         <Card>
@@ -238,37 +272,40 @@ export function SettingsScreen({navigation}: Props) {
 
         <SectionLabel title={t.about} />
         <Card>
-          <SettingsRow title={t.version} detail="1.0.0" />
-          <Text style={styles.note}>{t.aboutNote}</Text>
+          <SettingsRow title={t.version} detail={APP_VERSION} />
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.aboutNote}</Text>
           <SettingsRow
             title={t.terms}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => navigation.navigate('Legal', {document: 'terms'})}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
           <SettingsRow
             title={t.privacy}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => navigation.navigate('Legal', {document: 'privacy'})}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
-          <Text style={styles.note}>{t.osm}</Text>
+          <Text style={[styles.note, {color: colors.textMuted}]}>{t.osm}</Text>
           <SettingsRow
             title={t.licenses}
-            color={settingsColors.link}
+            color={colors.accent}
             onPress={() => navigation.navigate('Licenses')}
-            trailing={<Text style={styles.chevron}>›</Text>}
+            trailing={<Text style={[styles.chevron, {color: colors.textMuted}]}>›</Text>}
           />
-          <SettingsRow
-            title={t.theme}
-            trailing={<Text style={styles.link}>{themeLabel(t, settings.theme)}</Text>}
-            onPress={() => setThemeOpen(true)}
-          />
+          <View ref={themeRow} collapsable={false}>
+            <SettingsRow
+              title={t.theme}
+              trailing={<Text style={[styles.link, {color: colors.accent}]}>{themeLabel(t, settings.theme)}</Text>}
+              onPress={() => openMenu(themeRow, setThemeOpen)}
+            />
+          </View>
         </Card>
         <ChoiceMenu
           open={themeOpen}
           value={settings.theme}
           title={t.theme}
+          anchor={menuAnchor}
           options={[
             {id: 'light', label: t.themeLight},
             {id: 'dark', label: t.themeDark},
@@ -286,23 +323,22 @@ export function SettingsScreen({navigation}: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: settingsColors.page},
+  screen: {flex: 1},
   header: {
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: settingsColors.ink,
     paddingVertical: 8,
   },
   content: {paddingHorizontal: 16, paddingBottom: 130, gap: 4},
-  note: {...type.caption, color: settingsColors.muted, paddingBottom: 6},
-  link: {color: settingsColors.link, fontWeight: '700'},
-  chevron: {color: settingsColors.muted, fontSize: 22},
+  note: {...type.caption, paddingBottom: 6},
+  link: {fontWeight: '700'},
+  chevron: {fontSize: 22},
   split: {minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12},
-  ink: {...type.body, color: settingsColors.ink, flex: 1},
-  muted: {color: settingsColors.muted, fontWeight: '600'},
+  ink: {...type.body, flex: 1},
+  muted: {fontWeight: '600'},
   langHead: {flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginLeft: 4, marginBottom: 8},
-  langHeadText: {...type.bodyStrong, color: settingsColors.ink, fontSize: 17},
+  langHeadText: {...type.bodyStrong, fontSize: 17},
   globe: {width: 22, height: 22, alignItems: 'center', justifyContent: 'center'},
   globeRing: {
     width: 18,
@@ -329,30 +365,26 @@ const styles = StyleSheet.create({
   scrim: {flex: 1},
   scrimFill: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0},
   menu: {
-    marginTop: 108,
-    marginRight: 28,
-    alignSelf: 'flex-end',
+    position: 'absolute',
     width: 230,
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    shadowColor: '#1C1430',
     shadowOpacity: 0.16,
     shadowRadius: 16,
     shadowOffset: {width: 0, height: 8},
     elevation: 8,
   },
-  menuTitle: {...type.bodyStrong, color: settingsColors.ink, paddingVertical: 8},
+  menuTitle: {...type.bodyStrong, paddingVertical: 8},
   menuRow: {minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 8},
-  menuCheck: {width: 16, color: settingsColors.ink, fontSize: 16, fontWeight: '700'},
-  menuLabel: {...type.body, color: settingsColors.ink},
+  menuCheck: {width: 16, fontSize: 16, fontWeight: '700'},
+  menuLabel: {...type.body},
   iconHead: {flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8, marginLeft: 4},
-  iconHeadText: {...type.bodyStrong, color: settingsColors.ink, fontSize: 17},
+  iconHeadText: {...type.bodyStrong, fontSize: 17},
   resetRow: {minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10},
-  resetLabel: {...type.bodyStrong, color: settingsColors.danger, flex: 1},
+  resetLabel: {...type.bodyStrong, flex: 1},
   hintRow: {minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10},
-  hintLabel: {...type.bodyStrong, color: '#20B2AA', flex: 1},
+  hintLabel: {...type.bodyStrong, flex: 1},
   glyphBox: {width: 22, height: 22, alignItems: 'center', justifyContent: 'center'},
   shackle: {
     width: 10,
@@ -390,7 +422,6 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1.8,
-    borderColor: settingsColors.danger,
     borderTopColor: 'transparent',
   },
   resetArrow: {
@@ -404,15 +435,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 5,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: settingsColors.danger,
   },
 });
 
 function IconHeading({icon, title}: {icon: 'map' | 'note' | 'lock' | 'plane'; title: string}) {
+  const {colors} = useTheme();
   return (
     <View style={styles.iconHead}>
-      <RowGlyph kind={icon} color="#8E8E93" />
-      <Text style={styles.iconHeadText}>{title}</Text>
+      <RowGlyph kind={icon} color={colors.textMuted} />
+      <Text style={[styles.iconHeadText, {color: colors.textPrimary}]}>{title}</Text>
     </View>
   );
 }
@@ -428,15 +459,16 @@ function ToggleRow({
   value: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const {colors} = useTheme();
   return (
     <View style={styles.split}>
-      <RowGlyph kind={icon} color="#20B2AA" />
-      <Text style={styles.ink}>{title}</Text>
+      <RowGlyph kind={icon} color={colors.accent} />
+      <Text style={[styles.ink, {color: colors.textPrimary}]}>{title}</Text>
       <Switch
         value={value}
         onValueChange={onChange}
-        trackColor={{false: '#E4E5EA', true: '#20B2AA'}}
-        thumbColor="#FFFFFF"
+        trackColor={{false: colors.border, true: colors.accent}}
+        thumbColor={colors.white}
       />
     </View>
   );
@@ -510,10 +542,11 @@ function themeLabel(copy: ReturnType<typeof settingsCopy>, theme: 'light' | 'dar
 }
 
 function ResetIcon() {
+  const {colors} = useTheme();
   return (
     <View style={styles.mini}>
-      <View style={styles.resetRing} />
-      <View style={styles.resetArrow} />
+      <View style={[styles.resetRing, {borderColor: colors.danger}]} />
+      <View style={[styles.resetArrow, {borderBottomColor: colors.danger}]} />
     </View>
   );
 }
@@ -533,6 +566,7 @@ function ChoiceMenu<T extends string>({
   value,
   title,
   options,
+  anchor,
   onClose,
   onSelect,
 }: {
@@ -540,23 +574,44 @@ function ChoiceMenu<T extends string>({
   value: T;
   title?: string;
   options: Array<{id: T; label: string}>;
+  anchor: MenuAnchor | null;
   onClose: () => void;
   onSelect: (id: T) => void;
 }) {
+  const {colors} = useTheme();
+  const {width: winW, height: winH} = useWindowDimensions();
+  const menuWidth = 230;
+  const menuHeight = 16 + (title ? 36 : 0) + options.length * 40;
+  const pad = 8;
+  let left = (anchor?.x ?? winW - menuWidth - 28) + (anchor?.width ?? 0) - menuWidth;
+  left = Math.min(winW - menuWidth - pad, Math.max(pad, left));
+  let top = (anchor?.y ?? 108) + (anchor?.height ?? 0) + 6;
+  if (top + menuHeight > winH - pad) {
+    top = Math.max(pad, (anchor?.y ?? top) - menuHeight - 6);
+  }
   return (
     <Modal transparent visible={open} animationType="fade" onRequestClose={onClose}>
       <View style={styles.scrim}>
         <Pressable accessibilityRole="button" onPress={onClose} style={styles.scrimFill} />
-        <View style={styles.menu}>
-          {title ? <Text style={styles.menuTitle}>{title}</Text> : null}
+        <View
+          style={[
+            styles.menu,
+            {
+              top,
+              left,
+              backgroundColor: colors.surface,
+              shadowColor: colors.textPrimary,
+            },
+          ]}>
+          {title ? <Text style={[styles.menuTitle, {color: colors.textPrimary}]}>{title}</Text> : null}
           {options.map(option => (
             <Pressable
               key={option.id}
               accessibilityRole="button"
               onPress={() => onSelect(option.id)}
               style={styles.menuRow}>
-              <Text style={styles.menuCheck}>{value === option.id ? '✓' : ''}</Text>
-              <Text style={styles.menuLabel}>{option.label}</Text>
+              <Text style={[styles.menuCheck, {color: colors.accent}]}>{value === option.id ? '✓' : ''}</Text>
+              <Text style={[styles.menuLabel, {color: colors.textPrimary}]}>{option.label}</Text>
             </Pressable>
           ))}
         </View>

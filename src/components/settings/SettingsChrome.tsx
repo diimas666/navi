@@ -1,26 +1,17 @@
 import {useRef, useState, type ComponentRef, type ReactNode} from 'react';
 import {PanResponder, Pressable, StyleSheet, Text, View} from 'react-native';
 
+import {useTheme} from '../../theme/ThemeProvider';
 import {type} from '../../theme/typography';
 
-export const settingsColors = {
-  page: '#F6F3FB',
-  card: '#FFFFFF',
-  ink: '#1C1430',
-  muted: '#8E84A3',
-  link: '#6B4EE0',
-  warn: '#C98412',
-  danger: '#D64545',
-  track: '#E6E7EB',
-  line: 'rgba(60,60,67,0.12)',
-};
-
 export function SectionLabel({title}: {title: string}) {
-  return <Text style={styles.section}>{title}</Text>;
+  const {colors} = useTheme();
+  return <Text style={[styles.section, {color: colors.textMuted}]}>{title}</Text>;
 }
 
 export function Card({children}: {children: ReactNode}) {
-  return <View style={styles.card}>{children}</View>;
+  const {colors} = useTheme();
+  return <View style={[styles.card, {backgroundColor: colors.surface}]}>{children}</View>;
 }
 
 export function SettingsRow({
@@ -36,11 +27,12 @@ export function SettingsRow({
   color?: string;
   trailing?: ReactNode;
 }) {
+  const {colors} = useTheme();
   const body = (
     <View style={styles.row}>
       <View style={styles.copy}>
-        <Text style={[styles.title, color ? {color} : null]}>{title}</Text>
-        {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+        <Text style={[styles.title, {color: color ?? colors.textPrimary}]}>{title}</Text>
+        {detail ? <Text style={[styles.detail, {color: colors.textMuted}]}>{detail}</Text> : null}
       </View>
       {trailing}
     </View>
@@ -126,6 +118,7 @@ export function RangeBar({
       },
     }),
   ).current;
+  const {colors} = useTheme();
   const committed = max === min ? 0 : (value - min) / (max - min);
   const ratio = dragRatio ?? Math.min(1, Math.max(0, committed));
   const thumbLeft = ratio * Math.max(trackWidth - THUMB_SIZE, 0);
@@ -142,10 +135,13 @@ export function RangeBar({
         });
       }}
       {...pan.panHandlers}>
-      <View style={styles.rangeTrack} pointerEvents="none">
-        <View style={[styles.rangeFill, {width: thumbLeft + THUMB_SIZE / 2}]} />
+      <View style={[styles.rangeTrack, {backgroundColor: colors.border}]} pointerEvents="none">
+        <View style={[styles.rangeFill, {width: thumbLeft + THUMB_SIZE / 2, backgroundColor: colors.accent}]} />
       </View>
-      <View pointerEvents="none" style={[styles.rangeThumb, {left: thumbLeft}]} />
+      <View
+        pointerEvents="none"
+        style={[styles.rangeThumb, {left: thumbLeft, backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}
+      />
     </View>
   );
 }
@@ -170,8 +166,9 @@ export function Segment({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const {colors} = useTheme();
   return (
-    <View style={styles.segment}>
+    <View style={[styles.segment, {backgroundColor: colors.surfaceMuted}]}>
       {options.map(option => {
         const selected = option.id === value;
         return (
@@ -179,8 +176,10 @@ export function Segment({
             key={option.id}
             accessibilityRole="button"
             onPress={() => onChange(option.id)}
-            style={[styles.segmentItem, selected ? styles.segmentOn : null]}>
-            <Text style={[styles.segmentLabel, selected ? styles.segmentLabelOn : null]}>{option.label}</Text>
+            style={[styles.segmentItem, selected ? {backgroundColor: colors.surface} : null]}>
+            <Text style={[styles.segmentLabel, {color: selected ? colors.textPrimary : colors.textMuted}]}>
+              {option.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -193,13 +192,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 8,
     marginLeft: 8,
-    color: settingsColors.muted,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   card: {
-    backgroundColor: settingsColors.card,
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -212,11 +209,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   copy: {flex: 1, gap: 2, paddingVertical: 8},
-  title: {...type.bodyStrong, color: settingsColors.ink},
-  detail: {...type.caption, color: settingsColors.muted},
+  title: {...type.bodyStrong},
+  detail: {...type.caption},
   segment: {
     flexDirection: 'row',
-    backgroundColor: settingsColors.track,
     borderRadius: 14,
     padding: 4,
     gap: 4,
@@ -228,16 +224,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentOn: {
-    backgroundColor: '#FFFFFF',
-  },
   segmentLabel: {
-    color: settingsColors.muted,
     fontWeight: '700',
     fontSize: 13,
-  },
-  segmentLabelOn: {
-    color: settingsColors.ink,
   },
   range: {
     height: 36,
@@ -246,13 +235,11 @@ const styles = StyleSheet.create({
   rangeTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E4E5EA',
     overflow: 'hidden',
   },
   rangeFill: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#20B2AA',
   },
   rangeThumb: {
     position: 'absolute',
@@ -260,8 +247,6 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#1C1430',
     shadowOpacity: 0.18,
     shadowRadius: 4,
     shadowOffset: {width: 0, height: 1},

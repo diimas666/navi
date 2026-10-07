@@ -1,17 +1,22 @@
 import {useEffect} from 'react';
-import {StyleSheet, View} from 'react-native';
+import {StatusBar, StyleSheet, View} from 'react-native';
 import {NavigationContainer, DarkTheme, DefaultTheme} from '@react-navigation/native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
+import {UpdateModal} from './src/components/UpdateModal';
 import {useAppServices} from './src/hooks/useAppServices';
+import {useAppUpdate} from './src/hooks/useAppUpdate';
 import {navigationRef} from './src/navigation/navigationRef';
 import {RootNavigator, ToastBanner} from './src/navigation/RootNavigator';
+import {useSessionStore} from './src/store/sessionStore';
 import {useUiStore} from './src/store/uiStore';
 import {ThemeProvider, useTheme} from './src/theme/ThemeProvider';
 
 function Shell() {
   useAppServices();
+  const {offer, updateNow, updateLater} = useAppUpdate();
+  const driving = useSessionStore(state => state.driving);
   const toast = useUiStore(state => state.toast);
   useEffect(() => {
     if (!toast) {
@@ -25,6 +30,9 @@ function Shell() {
     <View style={styles.fill}>
       <RootNavigator />
       <ToastBanner message={toast} />
+      {offer && !driving ? (
+        <UpdateModal version={offer.version} onUpdate={updateNow} onLater={updateLater} />
+      ) : null}
     </View>
   );
 }
@@ -33,6 +41,8 @@ function ThemedNavigation() {
   const {colors, mode} = useTheme();
   const base = mode === 'dark' ? DarkTheme : DefaultTheme;
   return (
+    <>
+      <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} />
     <NavigationContainer
       ref={navigationRef}
       theme={{
@@ -48,6 +58,7 @@ function ThemedNavigation() {
       }}>
       <Shell />
     </NavigationContainer>
+    </>
   );
 }
 

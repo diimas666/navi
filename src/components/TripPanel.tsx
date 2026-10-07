@@ -139,21 +139,24 @@ export function TripPanel(props: Props) {
     return (
       <View style={styles.wrap}>
         <View style={styles.head}>
-          <Text style={styles.time}>{travel}</Text>
-          <Text style={styles.km}>{km}</Text>
+          <Text style={[styles.time, {color: colors.textPrimary}]}>{travel}</Text>
+          <Text style={[styles.km, {color: colors.textMuted}]}>{km}</Text>
         </View>
-        <Text numberOfLines={2} style={styles.roads}>
+        <Text numberOfLines={2} style={[styles.roads, {color: colors.textPrimary}]}>
           {roads}
         </Text>
-        <Text style={styles.note}>{props.best ? copy.bestRoute : copy.otherRoute}</Text>
+        <Text style={[styles.note, {color: colors.textMuted}]}>{props.best ? copy.bestRoute : copy.otherRoute}</Text>
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" onPress={props.onCancel} style={styles.postpone}>
-            <Text style={styles.postponeLabel}>{copy.postpone}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={props.onCancel}
+            style={[styles.postpone, {backgroundColor: colors.surfaceMuted}]}>
+            <Text style={[styles.postponeLabel, {color: colors.textPrimary}]}>{copy.postpone}</Text>
           </Pressable>
           <Animated.View style={[styles.goWrap, {transform: [{scale}]}]}>
-            <Pressable accessibilityRole="button" onPress={goNow} style={styles.go}>
-              <Animated.View style={[styles.goFill, {width: fillWidth}]} />
-              <Text style={styles.goLabel}>{copy.go}</Text>
+            <Pressable accessibilityRole="button" onPress={goNow} style={[styles.go, {backgroundColor: colors.accent}]}>
+              <Animated.View style={[styles.goFill, {width: fillWidth, backgroundColor: colors.accentPressed}]} />
+              <Text style={[styles.goLabel, {color: colors.onAccent}]}>{copy.go}</Text>
             </Pressable>
           </Animated.View>
         </View>
@@ -247,26 +250,24 @@ function clockAfter(seconds: number): string {
 const styles = StyleSheet.create({
   wrap: {gap: 6},
   head: {flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between'},
-  time: {color: '#1C1430', fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.4},
-  km: {color: '#8E879C', fontSize: 16, lineHeight: 22, fontWeight: '600', marginBottom: 4},
-  roads: {color: '#1C1430', fontSize: 16, lineHeight: 21, fontWeight: '500'},
-  note: {color: '#8E879C', fontSize: 14, lineHeight: 18, fontWeight: '500'},
+  time: {fontSize: 34, lineHeight: 38, fontWeight: '800', letterSpacing: -0.4},
+  km: {fontSize: 16, lineHeight: 22, fontWeight: '600', marginBottom: 4},
+  roads: {fontSize: 16, lineHeight: 21, fontWeight: '500'},
+  note: {fontSize: 14, lineHeight: 18, fontWeight: '500'},
   meta: {color: '#6E657F', fontSize: 14, fontWeight: '600'},
   actions: {flexDirection: 'row', gap: 10, marginTop: 8},
   postpone: {
     flex: 1,
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: '#E6E6EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  postponeLabel: {color: '#1C1430', fontSize: 17, fontWeight: '600'},
+  postponeLabel: {fontSize: 17, fontWeight: '600'},
   goWrap: {flex: 1.25},
   go: {
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: '#5AA9FF',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -276,9 +277,8 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: '#0B6FE8',
   },
-  goLabel: {color: '#FFFFFF', fontSize: 18, fontWeight: '700', zIndex: 1},
+  goLabel: {fontSize: 18, fontWeight: '700', zIndex: 1},
   etaWrap: {
     position: 'absolute',
     left: 16,

@@ -86,8 +86,7 @@ export function useAppServices(): void {
       useMapStore.getState().hydrateRegions(regions);
       usePlacesStore.getState().hydrate(places);
       useSearchHistoryStore.getState().hydrate(history);
-      await loadRegionRoads().catch(() => undefined);
-      await loadAllHouses().catch(() => undefined);
+      await Promise.all([loadRegionRoads().catch(() => undefined), loadAllHouses().catch(() => undefined)]);
       syncDrAllowance();
       hydrated.current = true;
       pauseDownloads();
@@ -206,20 +205,11 @@ export function useAppServices(): void {
           crossTrackM = match.crossTrackM;
         }
       }
-      useSessionStore.getState().setSnapshot({...snapshot, trust, latitude, longitude});
+      const liveSnapshot = {...snapshot, trust, latitude, longitude};
       const rawFix =
         Number.isFinite(snapshot.gpsLatitude) &&
         Number.isFinite(snapshot.gpsLongitude) &&
         !(Math.abs(snapshot.gpsLatitude) < 0.2 && Math.abs(snapshot.gpsLongitude) < 0.2);
-      if (rawFix && useSessionStore.getState().displayLatitude == null) {
-        const stoodRaw = placeFix(snapshot.gpsLatitude, snapshot.gpsLongitude);
-        useSessionStore.getState().setDisplay(stoodRaw.latitude, stoodRaw.longitude, null, false, null);
-        rememberPlace(stoodRaw.latitude, stoodRaw.longitude);
-      }
-      if (stood.replaced) {
-        useSessionStore.getState().setDisplay(latitude, longitude, null, false, null);
-        recoverFarRoute(latitude, longitude);
-      }
       const routeLine = useSessionStore.getState().route?.coordinates;
       const farFromLine =
         routeLine != null && routeLine.length > 1 && distanceToRoute(routeLine, latitude, longitude) > 30_000;
@@ -230,7 +220,10 @@ export function useAppServices(): void {
       const placed = useSessionStore.getState().displayLatitude != null;
       const carried =
         placed && (snapshot.source === 'dr' || snapshot.source === 'blended' || snapshot.source === 'held');
-      if (!stood.replaced && snapshot.hasEstimate && (snapshot.hasGps || carried)) {
+      if (stood.replaced) {
+        useSessionStore.getState().setLiveFix(liveSnapshot, latitude, longitude, null, false, null);
+        recoverFarRoute(latitude, longitude);
+      } else if (snapshot.hasEstimate && (snapshot.hasGps || carried)) {
         const held = holdOrFollow(snapshot, latitude, longitude);
         const session = useSessionStore.getState();
         const now = Date.now();
@@ -254,7 +247,7 @@ export function useAppServices(): void {
                 trustFix:
                   useMapStore.getState().online && (snapshot.source === 'gps' || snapshot.source === 'blended'),
               });
-        session.setDisplay(shown.latitude, shown.longitude, roadName, applied, crossTrackM);
+        session.setLiveFix(liveSnapshot, shown.latitude, shown.longitude, roadName, applied, crossTrackM);
         if (snapshot.hasGps) {
           rememberPlace(shown.latitude, shown.longitude);
         }
@@ -267,6 +260,12 @@ export function useAppServices(): void {
             () => undefined,
           );
         }
+      } else if (rawFix && useSessionStore.getState().displayLatitude == null) {
+        const stoodRaw = placeFix(snapshot.gpsLatitude, snapshot.gpsLongitude);
+        useSessionStore.getState().setLiveFix(liveSnapshot, stoodRaw.latitude, stoodRaw.longitude, null, false, null);
+        rememberPlace(stoodRaw.latitude, stoodRaw.longitude);
+      } else {
+        useSessionStore.getState().setSnapshot(liveSnapshot);
       }
       if (!snapshot.navigationActive && track.length > 1) {
         flushTrip();

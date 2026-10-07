@@ -46,7 +46,7 @@ export function SplashScreen({navigation}: Props) {
   return (
     <Pressable accessibilityRole="button" onPress={leave} style={[styles.screen, {backgroundColor: colors.background}]}>
       <Animated.View entering={FadeIn.duration(500)}>
-        <NaviMark width={210} height={256} />
+        <NaviMark width={196} height={196} />
       </Animated.View>
       <Animated.Text entering={FadeInDown.delay(180)} style={[type.display, {color: colors.textPrimary}]}>
         Navi

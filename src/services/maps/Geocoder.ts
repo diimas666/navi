@@ -6,7 +6,7 @@ import {useSettingsStore} from '../../store/settingsStore';
 import {haversineMeters} from '../../utils/geo';
 import {routingGraph} from '../roads/RegionGraph';
 import {AppError} from '../errors/AppError';
-import {searchDownloadedHouses, snapPlaceToHouse} from './houses';
+import {searchDownloadedHouses, searchDownloadedStreets, snapPlaceToHouse} from './houses';
 import {placeFix} from '../navigation/placeFix';
 import {googleSearchReady, googleSuggest} from './googlePlaces';
 import {matchesStreet, normalizeAddress, parseAddress, queryVariants, sameHouse, streetKey, wantedHouse} from './addressQuery';
@@ -28,11 +28,10 @@ export function searchPlaces(query: string): Place[] {
   }
   const street = parseAddress(query).street || query;
   const needle = streetKey(street);
-  if (needle.length < 2 || wantedHouse(query)) {
-    if (needle.length < 2) {
-      return [];
-    }
-  } else {
+  if (needle.length < 2) {
+    return [];
+  }
+  if (!wantedHouse(query)) {
     const cities = routingGraph()
       .nodes.filter(node => node.kind === 'city' || node.kind === 'poi')
       .filter(node => {
@@ -47,30 +46,86 @@ export function searchPlaces(query: string): Place[] {
         longitude: node.lon,
         kind: node.kind,
       }));
-    if (cities.length > 0) {
-      return cities;
+    if (cities.length > 0 && needle.length >= 4) {
+      const exact = cities.filter(item => streetKey(item.name).startsWith(needle) || needle.startsWith(streetKey(item.name)));
+      if (exact.length > 0 && needle.length >= streetKey(cities[0].name).length - 1) {
+        return cities;
+      }
     }
   }
   const seen = new Set<string>();
   const streets: Place[] = [];
-  routingGraph().edges.forEach(edge => {
-    if (streets.length >= 8 || !edge.name || edge.name === edge.highway || seen.has(edge.name)) {
+  const pushStreet = (id: string, name: string, latitude: number, longitude: number) => {
+    const key = streetKey(name);
+    if (!name || seen.has(key) || !catalogHit(key, needle)) {
       return;
     }
-    if (!matchesStreet(edge.name, query)) {
-      return;
+    seen.add(key);
+    streets.push({id, name, latitude, longitude, kind: 'street'});
+  };
+  searchDownloadedStreets(query).forEach(place => pushStreet(place.id, place.name, place.latitude, place.longitude));
+  streetCatalog().forEach(item => pushStreet(`way-${item.key}`, item.name, item.lat, item.lon));
+  const bias = viewerBias();
+  streets.sort((left, right) => {
+    const leftHit = prefixScore(streetKey(left.name), needle);
+    const rightHit = prefixScore(streetKey(right.name), needle);
+    if (leftHit !== rightHit) {
+      return rightHit - leftHit;
     }
-    seen.add(edge.name);
-    const [longitude, latitude] = edge.coordinates[0] ?? [0, 0];
-    streets.push({
-      id: edge.id,
-      name: edge.name,
-      latitude,
-      longitude,
-      kind: 'street',
-    });
+    if (!bias) {
+      return left.name.length - right.name.length;
+    }
+    return (
+      haversineMeters(bias.latitude, bias.longitude, left.latitude, left.longitude) -
+      haversineMeters(bias.latitude, bias.longitude, right.latitude, right.longitude)
+    );
   });
-  return streets;
+  return streets.slice(0, 8);
+}
+
+function catalogHit(key: string, needle: string): boolean {
+  if (key.includes(needle) || needle.includes(key)) {
+    return true;
+  }
+  return key.split(' ').some(word => word.startsWith(needle));
+}
+
+function prefixScore(key: string, needle: string): number {
+  if (key.startsWith(needle)) {
+    return 3;
+  }
+  if (key.split(' ').some(word => word.startsWith(needle))) {
+    return 2;
+  }
+  if (key.includes(needle)) {
+    return 1;
+  }
+  return 0;
+}
+
+let catalog: Array<{name: string; key: string; lat: number; lon: number}> | null = null;
+let catalogSize = -1;
+
+function streetCatalog(): Array<{name: string; key: string; lat: number; lon: number}> {
+  const graph = routingGraph();
+  if (catalog && catalogSize === graph.edges.length) {
+    return catalog;
+  }
+  const best = new Map<string, {name: string; key: string; lat: number; lon: number}>();
+  graph.edges.forEach(edge => {
+    if (!edge.name || edge.name === edge.highway) {
+      return;
+    }
+    const key = streetKey(edge.name);
+    if (key.length < 3 || best.has(key)) {
+      return;
+    }
+    const [longitude, latitude] = edge.coordinates[0] ?? [0, 0];
+    best.set(key, {name: edge.name, key, lat: latitude, lon: longitude});
+  });
+  catalog = Array.from(best.values());
+  catalogSize = graph.edges.length;
+  return catalog;
 }
 
 export function orderPlaces(places: Place[], bias: Bias | null, query = ''): Place[] {
@@ -146,24 +201,68 @@ export async function suggestPlaces(query: string): Promise<Place[]> {
   if (houses.length > 0) {
     return orderPlaces(houses, bias, query);
   }
+  const nearbyStreets = orderPlaces(
+    local.filter(place => place.kind === 'street'),
+    bias,
+    query,
+  );
+  const remote: Place[] = [];
+  const language = resolveLanguage(useSettingsStore.getState().language);
+  const tasks: Array<Promise<Place[]>> = [];
   if (googleSearchOn()) {
-    try {
-      const language = resolveLanguage(useSettingsStore.getState().language);
-      const google = await googleSuggest(query, language, bias);
-      if (google.length > 0) {
-        return google.map(place => snapPlaceToHouse(place, query));
-      }
-      return orderPlaces(local, bias, query);
-    } catch {
-      // Google can be blocked or slow. The older lookup below still answers.
+    tasks.push(
+      googleSuggest(query, language, bias).catch(() => [] as Place[]),
+    );
+  }
+  if (nearbyStreets.length < 4 && !wantedHouse(query)) {
+    tasks.push(
+      photonSearch(streetQuery(query), bias, 'street').catch(() => [] as Place[]),
+    );
+  }
+  if (tasks.length > 0) {
+    const batches = await Promise.all(tasks);
+    batches.forEach(batch => remote.push(...batch));
+  }
+  const usefulRemote = remote.filter(place => place.kind === 'street' || place.kind === 'house' || place.kind === 'address');
+  if (nearbyStreets.length > 0) {
+    return mergeStreetHits(nearbyStreets, usefulRemote.map(place => snapPlaceToHouse(place, query)), bias);
+  }
+  if (usefulRemote.length > 0) {
+    const snapped = usefulRemote.map(place => snapPlaceToHouse(place, query));
+    const ranked = orderPlaces(snapped, bias, query);
+    if (ranked.length > 0) {
+      return ranked;
     }
+    return snapped.slice(0, 8);
   }
   try {
-    const remote = await searchPlacesOnline(query);
-    return orderPlaces([...remote, ...local], bias, query);
+    const online = await searchPlacesOnline(query);
+    return orderPlaces([...online, ...local], bias, query);
   } catch {
     return orderPlaces(local, bias, query);
   }
+}
+
+function mergeStreetHits(local: Place[], remote: Place[], bias: Bias | null): Place[] {
+  const seen = new Set(local.map(place => streetKey(place.name)));
+  const extra: Place[] = [];
+  remote.forEach(place => {
+    const key = streetKey(place.name);
+    if (!key || seen.has(key) || place.kind === 'city') {
+      return;
+    }
+    if (
+      bias &&
+      Number.isFinite(place.latitude) &&
+      Number.isFinite(place.longitude) &&
+      haversineMeters(bias.latitude, bias.longitude, place.latitude, place.longitude) > 40000
+    ) {
+      return;
+    }
+    seen.add(key);
+    extra.push(place);
+  });
+  return [...local, ...extra].slice(0, 8);
 }
 
 function settlementOf(place: Place): string {

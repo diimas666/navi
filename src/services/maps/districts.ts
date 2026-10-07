@@ -1,5 +1,6 @@
 import cityFile from '../../assets/places/cityDistricts.json';
 import districtsFile from '../../assets/places/districts.json';
+import {routingGraph} from '../roads/RegionGraph';
 
 type DistrictRow = {
   region: string;
@@ -43,11 +44,28 @@ export function cityDistrictFeatures() {
 }
 
 export function districtLabels(): Array<{name: string; lat: number; lon: number}> {
-  return rows.map(row => ({name: shortDistrict(row.name), lat: row.lat, lon: row.lon}));
+  return rows.map(row => ({name: shortDistrict(row.name).toUpperCase(), lat: row.lat, lon: row.lon}));
 }
 
 export function cityDistrictLabels(): Array<{name: string; lat: number; lon: number}> {
   return cityRows.map(row => ({name: shortDistrict(row.name).toUpperCase(), lat: row.lat, lon: row.lon}));
+}
+
+export function cityNameLabels(): Array<{name: string; lat: number; lon: number}> {
+  return routingGraph()
+    .nodes.filter(node => node.kind === 'city')
+    .map(node => ({name: node.name.toUpperCase(), lat: node.lat, lon: node.lon}));
+}
+
+export function cityNameFeatures() {
+  return {
+    type: 'FeatureCollection' as const,
+    features: cityNameLabels().map(row => ({
+      type: 'Feature' as const,
+      properties: {name: row.name},
+      geometry: {type: 'Point' as const, coordinates: [row.lon, row.lat]},
+    })),
+  };
 }
 
 function shortDistrict(name: string): string {

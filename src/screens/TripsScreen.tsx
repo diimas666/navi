@@ -6,7 +6,6 @@ import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {TripCard} from '../components/TripCard';
-import {settingsColors} from '../components/settings/SettingsChrome';
 import {uiCopy} from '../i18n/uiCopy';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import type {MainTabParamList, RootStackParamList} from '../navigation/types';
@@ -15,6 +14,7 @@ import {enrichTrip, looksLikeAddress, preferPlace, reversePlace} from '../servic
 import {tripInSpan, type TripSpan} from '../services/trips/tripSpan';
 import {useSettingsStore} from '../store/settingsStore';
 import {useTripStore} from '../store/tripStore';
+import {useTheme} from '../theme/ThemeProvider';
 import {type} from '../theme/typography';
 
 type Props = CompositeScreenProps<
@@ -25,6 +25,7 @@ type Props = CompositeScreenProps<
 const SPANS: TripSpan[] = ['all', 'today', 'week', 'month'];
 
 export function TripsScreen({navigation}: Props) {
+  const {colors} = useTheme();
   const trips = useTripStore(state => state.trips);
   const language = useSettingsStore(state => state.language);
   const copy = uiCopy(language);
@@ -88,7 +89,7 @@ export function TripsScreen({navigation}: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, {backgroundColor: colors.background}]}>
       {menu ? (
         <Pressable
           accessibilityRole="button"
@@ -99,7 +100,7 @@ export function TripsScreen({navigation}: Props) {
       ) : null}
       <View style={styles.top}>
         <View style={styles.topSide} />
-        <Text style={styles.header}>{copy.tabTrips}</Text>
+        <Text style={[styles.header, {color: colors.textPrimary}]}>{copy.tabTrips}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={copy.tripFilter}
@@ -109,8 +110,8 @@ export function TripsScreen({navigation}: Props) {
         </Pressable>
       </View>
       {menu ? (
-        <View style={styles.menuWrap}>
-          <View style={styles.menu}>
+        <View style={[styles.menuWrap, {shadowColor: colors.textPrimary}]}>
+          <View style={[styles.menu, {backgroundColor: colors.surface}]}>
             {SPANS.map((item, index) => (
               <Pressable
                 key={item}
@@ -120,11 +121,13 @@ export function TripsScreen({navigation}: Props) {
                   setMenu(false);
                 }}
                 style={[
-                  span === item ? styles.menuOn : styles.menuRow,
+                  span === item ? [styles.menuOn, {backgroundColor: colors.accentSoft}] : styles.menuRow,
                   index === 0 ? styles.menuFirst : null,
                   index === SPANS.length - 1 ? styles.menuLast : null,
                 ]}>
-                <Text style={span === item ? styles.menuOnText : styles.menuText}>{labels[item]}</Text>
+                <Text style={span === item ? [styles.menuOnText, {color: colors.accent}] : [styles.menuText, {color: colors.textPrimary}]}>
+                  {labels[item]}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -140,8 +143,12 @@ export function TripsScreen({navigation}: Props) {
             <View style={styles.clock}>
               <View style={styles.hand} />
             </View>
-            <Text style={styles.emptyTitle}>{trips.length === 0 ? copy.tripsEmpty : copy.tripEmptySpan}</Text>
-            {trips.length === 0 ? <Text style={styles.emptyBody}>{copy.tripsEmptyBody}</Text> : null}
+            <Text style={[styles.emptyTitle, {color: colors.textPrimary}]}>
+              {trips.length === 0 ? copy.tripsEmpty : copy.tripEmptySpan}
+            </Text>
+            {trips.length === 0 ? (
+              <Text style={[styles.emptyBody, {color: colors.textMuted}]}>{copy.tripsEmptyBody}</Text>
+            ) : null}
           </View>
         }
         renderItem={({item}) => (
@@ -178,7 +185,8 @@ async function nameEnds(
 }
 
 function FilterGlyph({active}: {active: boolean}) {
-  const color = active ? settingsColors.link : settingsColors.ink;
+  const {colors} = useTheme();
+  const color = active ? colors.accent : colors.textPrimary;
   return (
     <View style={styles.glyph}>
       <View style={[styles.glyphLine, styles.glyphWide, {backgroundColor: color}]} />
@@ -189,7 +197,7 @@ function FilterGlyph({active}: {active: boolean}) {
 }
 
 const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: '#FFFFFF'},
+  screen: {flex: 1},
   top: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, zIndex: 5},
   topSide: {width: 44, height: 44, alignItems: 'center', justifyContent: 'center'},
   header: {
@@ -197,7 +205,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: settingsColors.ink,
   },
   glyph: {width: 18, gap: 3, alignItems: 'center'},
   glyphLine: {height: 2, borderRadius: 1},
@@ -215,23 +222,21 @@ const styles = StyleSheet.create({
     zIndex: 4,
     width: 168,
     borderRadius: 16,
-    shadowColor: '#1C1430',
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: {width: 0, height: 8},
   },
   menu: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingVertical: 6,
     overflow: 'hidden',
   },
   menuRow: {paddingHorizontal: 16, paddingVertical: 10},
-  menuOn: {paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F3EEFF'},
+  menuOn: {paddingHorizontal: 16, paddingVertical: 10},
   menuFirst: {borderTopLeftRadius: 10, borderTopRightRadius: 10},
   menuLast: {borderBottomLeftRadius: 10, borderBottomRightRadius: 10},
-  menuText: {fontSize: 16, fontWeight: '600', color: settingsColors.ink},
-  menuOnText: {fontSize: 16, fontWeight: '700', color: settingsColors.link},
+  menuText: {fontSize: 16, fontWeight: '600'},
+  menuOnText: {fontSize: 16, fontWeight: '700'},
   list: {paddingHorizontal: 16, gap: 10, paddingBottom: 120},
   emptyList: {flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 80},
   empty: {alignItems: 'center', gap: 10},
@@ -250,6 +255,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#8E8E93',
     marginTop: 10,
   },
-  emptyTitle: {...type.headline, color: settingsColors.ink, textAlign: 'center'},
-  emptyBody: {...type.body, color: settingsColors.muted, textAlign: 'center'},
+  emptyTitle: {...type.headline, textAlign: 'center'},
+  emptyBody: {...type.body, textAlign: 'center'},
 });

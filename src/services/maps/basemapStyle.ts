@@ -3,8 +3,9 @@ import type {StyleSpecification} from '@maplibre/maplibre-gl-style-spec';
 
 import {DARK_STYLE_URL, VECTOR_STYLE_URL} from '../../constants/map';
 import {jsonTooBig, readBoundedJson} from '../jsonLimit';
+import {mapFontStack} from './mapFonts';
 
-const STYLE_KEY = 'neiv.basemap.style.v2';
+const STYLE_KEY = 'neiv.basemap.style.v3';
 
 export type BasemapMode = 'light' | 'dark';
 
@@ -31,18 +32,25 @@ function hideBasemapDistricts(style: StyleSpecification): StyleSpecification {
       return layer;
     }
     const layout = layer.layout;
+    const font =
+      layout && 'text-font' in layout ? mapFontStack(layout['text-font']) : null;
     const field = layout && 'text-field' in layout ? JSON.stringify(layout['text-field']) : '';
     const local =
       field.includes('name:latin') || field.includes('name:nonlatin') || field.includes('name_en');
-    if (layer.id !== 'label_other' && !local) {
-      return layer;
-    }
     return {
       ...layer,
       ...(layer.id === 'label_other'
         ? {filter: ['match', ['get', 'class'], HIDDEN_PLACE_CLASSES, false, true]}
         : null),
-      ...(local && layout ? {layout: {...layout, 'text-field': LOCAL_NAME}} : null),
+      ...(layout
+        ? {
+            layout: {
+              ...layout,
+              ...(font ? {'text-font': font} : null),
+              ...(local ? {'text-field': LOCAL_NAME} : null),
+            },
+          }
+        : null),
     };
   });
   return {...style, layers: layers as StyleSpecification['layers']};

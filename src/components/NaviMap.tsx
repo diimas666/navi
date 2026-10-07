@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState, type MutableRefObject} from 'react';
+import {memo, useEffect, useMemo, useRef, useState, type MutableRefObject} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {
   Camera,
@@ -12,9 +12,8 @@ import type {StyleSpecification} from '@maplibre/maplibre-gl-style-spec';
 
 import {GOOGLE_MAPS_KEY} from '../constants/googleMapsKey';
 import {DARK_STYLE_URL, VECTOR_STYLE_URL} from '../constants/map';
-import {GoogleRoadMap, googleWebViewReady} from './GoogleRoadMap';
 import {loadBasemapStyle} from '../services/maps/basemapStyle';
-import {cityDistrictLabels, districtLabels} from '../services/maps/districts';
+import {cityDistrictFeatures, cityNameFeatures, districtFeatures} from '../services/maps/districts';
 import {
   fetchNearbyPlaces,
   fetchPlaceHours,
@@ -35,6 +34,8 @@ import {VehicleMarker} from './VehicleMarker';
 import type {RoutePlan} from '../models/domain';
 import {uiCopy} from '../i18n/uiCopy';
 import {driveBearing, driveFocal, drivePadding, glideDuration} from '../services/maps/cameraPull';
+import {MAP_FONT_BOLD, MAP_FONT_REGULAR} from '../services/maps/mapFonts';
+import {buildingLayerVisibility} from '../services/maps/mapLayers';
 import {distanceToRoute} from '../services/navigation/offRoute';
 import {remainingCoordinates} from '../services/navigation/maneuver';
 import {routingGraph} from '../services/roads/RegionGraph';
@@ -97,7 +98,7 @@ type Props = {
   nightMap?: boolean;
 };
 
-export function NaviMap({
+export const NaviMap = memo(function NaviMap({
   latitude,
   longitude,
   heading,
@@ -135,17 +136,27 @@ export function NaviMap({
   const lastPitch = useRef(0);
   const pitchArmed = useRef(false);
   const lastPinned = useRef(false);
+  const holdingMap = useRef(false);
+  const lastFollow = useRef({latitude, longitude});
+  const startCamera = useRef({
+    center: [longitude, latitude] as [number, number],
+    zoom: zoomRef.current,
+  });
   const [frameHeight, setFrameHeight] = useState(0);
-  const [frameWidth, setFrameWidth] = useState(0);
   const [mapReady, setMapReady] = useState(false);
   const pitched = Boolean(buildings3d && tracking);
   const streetLabels = mapMode === 'dark' ? 'highway_name_other' : 'highway-name-path';
   const pinned = Boolean(tracking && follow && headingUp);
   const frame = frameHeight || 780;
+  const heldHeading = useRef(heading);
+  if (speedMps >= 2.2) {
+    heldHeading.current = heading;
+  }
+  const cameraHeading = speedMps >= 2.2 ? heading : heldHeading.current;
   const course = pinned
-    ? driveBearing(route?.coordinates, latitude, longitude, heading, speedMps)
+    ? driveBearing(route?.coordinates, latitude, longitude, cameraHeading, speedMps)
     : tracking && headingUp
-      ? heading
+      ? cameraHeading
       : 0;
   const pitch = pitched ? 58 : 0;
   const [basemap, setBasemap] = useState<StyleSpecification | null>(null);
@@ -153,15 +164,10 @@ export function NaviMap({
   const online = useMapStore(state => state.online);
   const linkKnown = useMapStore(state => state.linkKnown);
   const offlineMap = linkKnown && !online;
-  const [googleLive, setGoogleLive] = useState(false);
   const [look, setLook] = useState({latitude, longitude, zoom: zoomRef.current});
   const [nearby, setNearby] = useState<NearbyPlace[]>([]);
   const [picked, setPicked] = useState<NearbyPlace | null>(null);
   const [hours, setHours] = useState<PlaceHours | null>(null);
-  const useGoogle =
-    GOOGLE_MAPS_KEY.length > 20 &&
-    googleWebViewReady() &&
-    (googleLive || !offlineMap);
   const styleKind = `${mapMode}:${basemap ? 'styled' : 'url'}`;
   const seenStyle = useRef(styleKind);
   const styleGeneration = useRef(0);
@@ -228,31 +234,10 @@ export function NaviMap({
     setPicked(place);
   };
 
-  const cityMarks = useMemo(() => cityDistrictLabels(), []);
-  const hoodMarks = useMemo(() => districtLabels(), []);
-  const areaZoom = look.zoom;
-  const showAreaNames = !tracking && !pitched && Math.abs(course) < 15;
-  const visibleCityDistricts = useMemo(() => {
-    if (!showAreaNames || areaZoom < 8.8 || areaZoom > 15.8) {
-      return [];
-    }
-    return cityMarks.filter(
-      item => haversineMeters(look.latitude, look.longitude, item.lat, item.lon) < 32000,
-    );
-  }, [areaZoom, cityMarks, look.latitude, look.longitude, showAreaNames]);
-  const visibleHoods = useMemo(() => {
-    if (!showAreaNames || areaZoom < 12.3 || areaZoom > 16.9) {
-      return [];
-    }
-    return hoodMarks
-      .map(item => ({
-        ...item,
-        away: haversineMeters(look.latitude, look.longitude, item.lat, item.lon),
-      }))
-      .filter(item => item.away < 9000)
-      .sort((left, right) => left.away - right.away)
-      .slice(0, 28);
-  }, [areaZoom, hoodMarks, look.latitude, look.longitude, showAreaNames]);
+  const cityNameMarks = useMemo(() => cityNameFeatures(), []);
+  const cityDistrictMarks = useMemo(() => cityDistrictFeatures(), []);
+  const hoodMarks = useMemo(() => districtFeatures(), []);
+  const showAreaNames = !pitched;
   const streetKey = `${view.latitude.toFixed(3)}:${view.longitude.toFixed(3)}`;
   const localStreets = useMemo(() => {
     const [latText, lonText] = streetKey.split(':');
@@ -276,12 +261,13 @@ export function NaviMap({
     const lat = Number(latText);
     const lon = Number(lonText);
     const ranked = housesNear(lat, lon, 0.02)
+      .filter(house => house.house.length > 0 && !house.entrance)
       .map(house => ({
         house,
         offset: Math.abs(house.latitude - lat) + Math.abs(house.longitude - lon),
       }))
       .sort((left, right) => left.offset - right.offset)
-      .slice(0, 1400);
+      .slice(0, 1800);
     return {
       type: 'FeatureCollection' as const,
       features: ranked.map(({house}, index) => ({
@@ -319,10 +305,14 @@ export function NaviMap({
       }));
     return {type: 'FeatureCollection' as const, features};
   }, [route]);
-  const liveCoordinates =
-    tracking && route && route.coordinates.length > 1
-      ? remainingCoordinates(route.coordinates, latitude, longitude)
-      : route?.coordinates;
+  const progressKey = tracking ? `${latitude.toFixed(4)}:${longitude.toFixed(4)}` : '';
+  const liveCoordinates = useMemo(() => {
+    if (tracking && route && route.coordinates.length > 1) {
+      const [latText, lonText] = progressKey.split(':');
+      return remainingCoordinates(route.coordinates, Number(latText), Number(lonText));
+    }
+    return route?.coordinates;
+  }, [tracking, route, progressKey]);
   const routeShape = useMemo(
     () =>
       liveCoordinates && liveCoordinates.length > 1
@@ -389,18 +379,28 @@ export function NaviMap({
   }, [fitToken, mapReady, otherRoutes, route, tracking]);
 
   useEffect(() => {
-    if (!mapReady || !follow) {
+    if (!mapReady || !follow || holdingMap.current) {
       return;
     }
     const now = Date.now();
     const elapsed = lastCameraMove.current === 0 ? 480 : now - lastCameraMove.current;
     const pitchChanged = lastPitch.current !== pitch;
     const pinChanged = lastPinned.current !== pinned;
+    const moved = haversineMeters(
+      lastFollow.current.latitude,
+      lastFollow.current.longitude,
+      latitude,
+      longitude,
+    );
     lastPitch.current = pitch;
     lastPinned.current = pinned;
     if (!pitchChanged && !pinChanged && elapsed < (pinned ? 70 : tracking ? 120 : 280)) {
       return;
     }
+    if (!tracking && !pinChanged && !pitchChanged && moved < 22) {
+      return;
+    }
+    lastFollow.current = {latitude, longitude};
     lastCameraMove.current = now;
     try {
       settleCamera(
@@ -409,9 +409,11 @@ export function NaviMap({
           bearing: course,
           zoom: zoomRef.current,
           pitch,
-          padding: pinned ? drivePadding(frame) : {top: 0, right: 0, bottom: 0, left: 0},
-          duration: pitchChanged ? 480 : pinned ? glideDuration(elapsed) : tracking ? 280 : 700,
+          duration: pitchChanged ? 480 : pinned ? glideDuration(elapsed) : tracking ? 280 : 160,
           easing: pinned ? 'linear' : 'ease',
+          ...(pinned || pinChanged
+            ? {padding: pinned ? drivePadding(frame) : {top: 0, right: 0, bottom: 0, left: 0}}
+            : null),
         }),
       );
     } catch {
@@ -448,9 +450,7 @@ export function NaviMap({
       style={styles.fill}
       onLayout={event => {
         const nextHeight = Math.round(event.nativeEvent.layout.height);
-        const nextWidth = Math.round(event.nativeEvent.layout.width);
         setFrameHeight(current => (current === nextHeight ? current : nextHeight));
-        setFrameWidth(current => (current === nextWidth ? current : nextWidth));
       }}>
       <Map
         style={styles.fill}
@@ -467,7 +467,7 @@ export function NaviMap({
           }
         }}
         attribution={false}
-        logo={false}
+        logo
         touchPitch={false}
         onPress={event => {
           const [pressLongitude, pressLatitude] = event.nativeEvent.lngLat;
@@ -483,12 +483,16 @@ export function NaviMap({
           if (!event.nativeEvent.userInteraction) {
             return;
           }
+          holdingMap.current = true;
+          const camera = cameraRef.current as {stop?: () => void} | null;
+          camera?.stop?.();
           onGesture?.(true, event.nativeEvent.zoom);
         }}
         onRegionIsChanging={event => {
           if (!event.nativeEvent.userInteraction) {
             return;
           }
+          holdingMap.current = true;
           onGesture?.(true, event.nativeEvent.zoom);
         }}
         onRegionDidChange={event => {
@@ -523,49 +527,63 @@ export function NaviMap({
           if (!native.userInteraction) {
             return;
           }
+          holdingMap.current = false;
           onGesture?.(false, native.zoom);
           onUserMove?.(native.zoom);
         }}>
         <Camera
           ref={cameraRef}
           initialViewState={{
-            center: [longitude, latitude],
-            zoom: zoomRef.current,
-            bearing: course,
-            pitch,
+            center: startCamera.current.center,
+            zoom: startCamera.current.zoom,
+            bearing: 0,
+            pitch: 0,
           }}
         />
-        {pitched ? (
-          <Layer
-            id="building-3d"
-            type="fill-extrusion"
-            source="openmaptiles"
-            source-layer="building"
-            beforeId="aeroway-taxiway"
-            minzoom={14.5}
-            filter={['!=', ['get', 'hide_3d'], true]}
-            paint={{
-              'fill-extrusion-color': mapMode === 'dark' ? '#3C3A44' : '#D7D2C8',
-              'fill-extrusion-height': ['max', ['to-number', ['get', 'render_height']], 8],
-              'fill-extrusion-base': ['coalesce', ['to-number', ['get', 'render_min_height']], 0],
-              'fill-extrusion-opacity': 0.96,
-              'fill-extrusion-vertical-gradient': true,
-            }}
-          />
-        ) : null}
+        <Layer
+          id="building-3d"
+          type="fill-extrusion"
+          source="openmaptiles"
+          source-layer="building"
+          beforeId={streetLabels}
+          minzoom={14.5}
+          filter={['!=', ['get', 'hide_3d'], true]}
+          layout={{visibility: buildingLayerVisibility(pitched)['building-3d']}}
+          paint={{
+            'fill-extrusion-color': mapMode === 'dark' ? '#6A7384' : '#D7D2C8',
+            'fill-extrusion-height': ['max', ['to-number', ['get', 'render_height']], 8],
+            'fill-extrusion-base': ['coalesce', ['to-number', ['get', 'render_min_height']], 0],
+            'fill-extrusion-opacity': 0.96,
+            'fill-extrusion-vertical-gradient': true,
+          }}
+        />
+        <Layer
+          id="building-2d"
+          type="fill"
+          source="openmaptiles"
+          source-layer="building"
+          beforeId={streetLabels}
+          minzoom={13}
+          layout={{visibility: buildingLayerVisibility(pitched)['building-2d']}}
+          paint={{
+            'fill-color': mapMode === 'dark' ? '#6B7484' : '#D4CFC4',
+            'fill-opacity': 0.94,
+            'fill-outline-color': mapMode === 'dark' ? '#4A5260' : '#C4BDB0',
+          }}
+        />
         <Layer
           id="tile-housenumbers"
           type="symbol"
           source="openmaptiles"
           source-layer="housenumber"
-          minzoom={15}
+          minzoom={14}
           layout={{
             'text-field': ['to-string', ['coalesce', ['get', 'housenumber'], ['get', 'name']]],
-            'text-font': ['Noto Sans Regular'],
+            'text-font': MAP_FONT_REGULAR,
             'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 17, 13, 19, 16],
             'text-padding': 1,
-            'text-allow-overlap': false,
-            'text-ignore-placement': false,
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
           }}
           paint={{
             'text-color': mapMode === 'dark' ? '#F0ECF8' : '#3A3348',
@@ -573,6 +591,85 @@ export function NaviMap({
             'text-halo-width': 1.6,
           }}
         />
+        {showAreaNames ? (
+          <>
+            <GeoJSONSource id="city-names" data={cityNameMarks}>
+              <Layer
+                id="city-name-labels"
+                type="symbol"
+                minzoom={8.4}
+                maxzoom={12.4}
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-font': MAP_FONT_BOLD,
+                  'text-size': 18,
+                  'text-transform': 'uppercase',
+                  'text-letter-spacing': 0.12,
+                  'text-padding': 12,
+                  'text-max-width': 8,
+                  'text-allow-overlap': true,
+                  'text-ignore-placement': true,
+                  'text-optional': true,
+                }}
+                paint={{
+                  'text-color': mapMode === 'dark' ? '#EEECF6' : '#2E3542',
+                  'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#F4F1EA',
+                  'text-halo-width': 1.8,
+                }}
+              />
+            </GeoJSONSource>
+            <GeoJSONSource id="city-districts" data={cityDistrictMarks}>
+              <Layer
+                id="city-district-labels"
+                type="symbol"
+                minzoom={8.6}
+                maxzoom={11.2}
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-font': MAP_FONT_BOLD,
+                  'text-size': 13,
+                  'text-transform': 'uppercase',
+                  'text-letter-spacing': 0.08,
+                  'text-padding': 16,
+                  'text-max-width': 8,
+                  'text-allow-overlap': true,
+                  'text-ignore-placement': true,
+                  'text-optional': true,
+                }}
+                paint={{
+                  'text-color': mapMode === 'dark' ? '#D8D3E6' : '#3F4654',
+                  'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#F4F1EA',
+                  'text-halo-width': 1.4,
+                }}
+              />
+            </GeoJSONSource>
+            <GeoJSONSource id="hood-labels" data={hoodMarks}>
+              <Layer
+                id="hood-name-labels"
+                type="symbol"
+                minzoom={11}
+                maxzoom={16.4}
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-font': MAP_FONT_BOLD,
+                  'text-size': 15,
+                  'text-transform': 'uppercase',
+                  'text-letter-spacing': 0.06,
+                  'text-padding': 18,
+                  'text-max-width': 9,
+                  'text-allow-overlap': true,
+                  'text-ignore-placement': true,
+                  'text-optional': true,
+                }}
+                paint={{
+                  'text-color': mapMode === 'dark' ? '#C8C2D6' : '#4A5260',
+                  'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#F4F1EA',
+                  'text-halo-width': 1.6,
+                }}
+              />
+            </GeoJSONSource>
+          </>
+        ) : null}
         {localStreets.features.length > 0 ? (
           <GeoJSONSource id="local-streets" data={localStreets}>
             <Layer
@@ -594,7 +691,7 @@ export function NaviMap({
               minzoom={14}
               layout={{
                 'text-field': ['get', 'house'],
-                'text-font': ['Noto Sans Regular'],
+                'text-font': MAP_FONT_REGULAR,
                 'text-size': 13,
                 'text-allow-overlap': true,
                 'text-ignore-placement': true,
@@ -651,7 +748,7 @@ export function NaviMap({
               layout={{
                 'symbol-placement': 'line',
                 'text-field': ['get', 'name'],
-                'text-font': ['Noto Sans Regular'],
+                'text-font': MAP_FONT_REGULAR,
                 'text-size': 14,
                 'text-max-angle': 28,
                 'text-padding': 4,
@@ -705,7 +802,7 @@ export function NaviMap({
             />
           </Marker>
         ))}
-        {!googleLive && placeIcons
+        {placeIcons
           ? nearby.map(place => (
               <Marker
                 key={place.id}
@@ -776,175 +873,23 @@ export function NaviMap({
             </View>
           </Marker>
         ) : null}
-        {!located || (pinned && googleLive) ? null : (
+        {!located || pinned ? null : (
           <Marker id="vehicle" lngLat={[longitude, latitude]} anchor="center">
             <VehicleMarker navigating={tracking} rotation={tracking && headingUp ? 0 : heading} />
           </Marker>
         )}
       </Map>
-      {useGoogle ? (
-        <View
-          pointerEvents={googleLive ? 'auto' : 'none'}
-          style={[styles.google, {opacity: googleLive ? 1 : 0}]}>
-          <GoogleRoadMap
-            latitude={latitude}
-            longitude={longitude}
-            zoom={zoomRef.current}
-            heading={course}
-            follow={follow}
-            tracking={Boolean(tracking)}
-            frame={frame}
-            route={
-              route && liveCoordinates && liveCoordinates.length > 1
-                ? {...route, coordinates: liveCoordinates}
-                : route
-            }
-            alternatives={otherRoutes}
-            destination={destination ?? null}
-            stops={stops}
-            routeColor={colors.route}
-            language={language}
-            fitToken={fitToken}
-            showUser={!pinned && located}
-            placeIcons={placeIcons}
-            nearby={nearby}
-            houses={houseMarks.features.map(item => ({
-              house: String(item.properties.house),
-              latitude: item.geometry.coordinates[1],
-              longitude: item.geometry.coordinates[0],
-            }))}
-            night={mapMode === 'dark'}
-            onUserMove={onUserMove}
-            onGesture={onGesture}
-            onLook={(lookLatitude, lookLongitude, lookZoom) => {
-              setLook(current => {
-                const nextLat = follow ? current.latitude : lookLatitude;
-                const nextLon = follow ? current.longitude : lookLongitude;
-                if (
-                  Math.abs(current.latitude - nextLat) < 0.0008 &&
-                  Math.abs(current.longitude - nextLon) < 0.0008 &&
-                  Math.abs(current.zoom - lookZoom) < 0.15
-                ) {
-                  return current;
-                }
-                return {latitude: nextLat, longitude: nextLon, zoom: lookZoom};
-              });
-            }}
-            onMapPress={(pressLongitude, pressLatitude) => {
-              setPicked(null);
-              onMapPress?.(pressLongitude, pressLatitude);
-            }}
-            onPlace={place => choosePlace(place)}
-            onAlternative={onAlternative}
-            onReady={() => setGoogleLive(true)}
-            onFail={() => {
-              setGoogleLive(false);
-            }}
-          />
-        </View>
-      ) : null}
       {pinned && located ? (
         <View pointerEvents="none" style={[styles.chevron, {top: driveFocal(frame) - 32}]}>
-          <VehicleMarker navigating rotation={googleLive ? heading : 0} />
+          <VehicleMarker navigating rotation={0} />
         </View>
       ) : null}
-      {googleLive && picked ? (
-        <View pointerEvents="box-none" style={styles.poiFloat}>
-          <PlaceCard
-            place={picked}
-            here={{latitude, longitude}}
-            hours={hours}
-            copy={copy}
-            onGo={() => onPlaceGo?.(picked)}
-            onClose={() => setPicked(null)}
-          />
-        </View>
-      ) : null}
-      {googleLive ? null : (
-        <Text style={[type.caption, styles.attribution]}>
-          © OpenStreetMap contributors
-        </Text>
-      )}
-      {frameWidth > 0 && (visibleCityDistricts.length > 0 || visibleHoods.length > 0) ? (
-        <View pointerEvents="none" style={styles.areaNames}>
-          {visibleCityDistricts.map(item => {
-            const point = projectOnMap(
-              item.lat,
-              item.lon,
-              look.latitude,
-              look.longitude,
-              look.zoom,
-              frameWidth,
-              frame,
-            );
-            if (!point) {
-              return null;
-            }
-            return (
-              <Text
-                key={`city-${item.name}-${item.lat}`}
-                style={[
-                  styles.cityDistrict,
-                  mapMode === 'dark' ? styles.cityDistrictDark : null,
-                  {left: point.x, top: point.y},
-                ]}>
-                {item.name}
-              </Text>
-            );
-          })}
-          {visibleHoods.map(item => {
-            const point = projectOnMap(
-              item.lat,
-              item.lon,
-              look.latitude,
-              look.longitude,
-              look.zoom,
-              frameWidth,
-              frame,
-            );
-            if (!point) {
-              return null;
-            }
-            return (
-              <Text
-                key={`hood-${item.name}-${item.lat}`}
-                style={[
-                  styles.hoodDistrict,
-                  mapMode === 'dark' ? styles.hoodDistrictDark : null,
-                  {left: point.x, top: point.y},
-                ]}>
-                {item.name}
-              </Text>
-            );
-          })}
-        </View>
-      ) : null}
+      <Text style={[type.caption, styles.attribution]}>
+        © OpenStreetMap contributors · MapLibre
+      </Text>
     </View>
   );
-}
-
-function mercatorY(latitude: number): number {
-  const rad = (latitude * Math.PI) / 180;
-  return Math.log(Math.tan(Math.PI / 4 + rad / 2));
-}
-
-function projectOnMap(
-  latitude: number,
-  longitude: number,
-  centerLat: number,
-  centerLon: number,
-  zoom: number,
-  width: number,
-  height: number,
-): {x: number; y: number} | null {
-  const world = 256 * 2 ** Math.min(22, Math.max(1, zoom));
-  const x = width / 2 + ((longitude - centerLon) / 360) * world;
-  const y = height / 2 - ((mercatorY(latitude) - mercatorY(centerLat)) / (2 * Math.PI)) * world;
-  if (x < -80 || y < -30 || x > width + 80 || y > height + 30) {
-    return null;
-  }
-  return {x, y};
-}
+});
 
 function nearestPlace(places: NearbyPlace[], latitude: number, longitude: number, zoom: number): NearbyPlace | null {
   const limit = zoom >= 16 ? 70 : zoom >= 14 ? 120 : 180;
@@ -1111,7 +1056,7 @@ function CheckeredFlag() {
 }
 
 const styles = StyleSheet.create({
-  fill: {flex: 1},
+  fill: {flex: 1, overflow: 'hidden', zIndex: 0},
   google: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0},
   chevron: {
     position: 'absolute',
@@ -1125,47 +1070,7 @@ const styles = StyleSheet.create({
     left: 12,
     bottom: 8,
     color: '#8E84A3',
-  },
-  areaNames: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 8,
-  },
-  cityDistrict: {
-    position: 'absolute',
-    width: 150,
-    marginLeft: -75,
-    marginTop: -8,
-    color: '#3F4654',
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textAlign: 'center',
-    textShadowColor: '#F4F1EA',
-    textShadowOffset: {width: 0, height: 0},
-    textShadowRadius: 4,
-  },
-  cityDistrictDark: {
-    color: '#D8D3E6',
-    textShadowColor: '#1C1430',
-  },
-  hoodDistrict: {
-    position: 'absolute',
-    width: 140,
-    marginLeft: -70,
-    marginTop: -8,
-    color: '#5A6270',
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    textShadowColor: '#F4F1EA',
-    textShadowOffset: {width: 0, height: 0},
-    textShadowRadius: 4,
-  },
-  hoodDistrictDark: {
-    color: '#C8C2D6',
-    textShadowColor: '#1C1430',
+    zIndex: 2,
   },
   destWrap: {alignItems: 'center', gap: 4},
   destName: {

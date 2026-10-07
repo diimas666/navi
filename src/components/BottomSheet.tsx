@@ -13,16 +13,16 @@ type Props = {
   lift?: number;
 };
 
-export function BottomSheet({children, aboveTabs, light, lift = 0}: Props) {
+export function BottomSheet({children, aboveTabs, lift = 0}: Props) {
   const {colors} = useTheme();
   const insets = useSafeAreaInsets();
   const bottom = lift > 0 ? lift + 8 : aboveTabs ? Math.max(insets.bottom, 12) + 84 : 12;
   const sheetColor = {
-    backgroundColor: light ? 'rgba(244,241,236,0.96)' : colors.glass,
-    borderColor: light ? 'transparent' : colors.border,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   };
   return (
-    <Animated.View entering={FadeInDown.duration(280)} style={[styles.wrap, {bottom}]}>
+    <Animated.View entering={FadeInDown.duration(280)} style={[styles.wrap, {bottom}]} collapsable={false}>
       <View style={[styles.sheet, sheetColor]}>
         <View style={[styles.handle, {backgroundColor: colors.border}]} />
         {children}
@@ -36,12 +36,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
+    zIndex: 40,
+    elevation: 40,
   },
   sheet: {
     borderRadius: radius.lg,
     borderWidth: 1,
     padding: 16,
     gap: 10,
+    overflow: 'hidden',
   },
   handle: {
     alignSelf: 'center',

@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Keyboard, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {CompositeScreenProps} from '@react-navigation/native';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
@@ -24,9 +24,11 @@ import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue
 import {speedLimitKmh} from '../services/navigation/speedLimit';
 import {isNightAt} from '../services/maps/sun';
 import {cameraAheadMeters} from '../services/maps/speedCameras';
-import {coverageGapAhead, formatRegionList, missingRegionsAlong} from '../services/maps/regionCoverage';
-import {downloadRegion} from '../services/maps/OfflineMapService';
+import {zoomFor} from '../services/maps/driveZoom';
+import {RouteNeedBanner} from '../components/RouteNeedBanner';
+import {coverageGapAhead, missingRegionsAlong} from '../services/maps/regionCoverage';
 import {snapPlaceToHouse} from '../services/maps/houses';
+import type {NearbyPlace} from '../services/maps/nearbyPlaces';
 import {clearOpenNav, loadOpenNav, saveOpenNav} from '../services/navigation/openNav';
 import {saveOpenTrip} from '../hooks/useAppServices';
 import {resolveLanguage} from '../i18n/settingsCopy';
@@ -93,8 +95,6 @@ export function MapScreen({navigation}: Props) {
   const incomingToken = useLinkStore(state => state.token);
   const movedAt = useRef(0);
   const touching = useRef(false);
-  const turnRate = useRef(0);
-  const lastHead = useRef<{at: number; heading: number} | null>(null);
   const nightHold = useRef(false);
   const trust = (snapshot?.trust ?? 'lost') as TrustLevel;
   const drActive = snapshot?.source === 'dr' || snapshot?.source === 'blended';
@@ -113,7 +113,7 @@ export function MapScreen({navigation}: Props) {
   const arriveHold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFix = useRef<{lat: number; lon: number} | null>(null);
   if (located && follow && !keepManualZoom && !touching.current) {
-    zoomRef.current = zoomFor(baseZoom, liveSpeed, turnRate.current);
+    zoomRef.current = zoomFor(baseZoom, liveSpeed);
   }
 
   useEffect(() => {
@@ -173,26 +173,6 @@ export function MapScreen({navigation}: Props) {
   }, [baseZoom, located]);
 
   useEffect(() => {
-    const heading = shownHeading;
-    const now = Date.now();
-    const previous = lastHead.current;
-    if (previous) {
-      const dt = (now - previous.at) / 1000;
-      if (dt > 0.05 && dt < 1.5) {
-        let delta = heading - previous.heading;
-        if (delta > 180) {
-          delta -= 360;
-        }
-        if (delta < -180) {
-          delta += 360;
-        }
-        turnRate.current = delta / dt;
-      }
-    }
-    lastHead.current = {at: now, heading};
-  }, [shownHeading]);
-
-  useEffect(() => {
     const timer = setInterval(() => {
       if (touching.current || useSessionStore.getState().follow) {
         return;
@@ -206,7 +186,7 @@ export function MapScreen({navigation}: Props) {
       }
       if (!settings.keepManualZoom) {
         const speed = useSessionStore.getState().snapshot?.speedMps ?? 0;
-        zoomRef.current = zoomFor(settings.baseZoom, speed, turnRate.current);
+        zoomRef.current = zoomFor(settings.baseZoom, speed);
         setZoomToken(token => token + 1);
       }
       useSessionStore.getState().setFollow(true);
@@ -224,7 +204,7 @@ export function MapScreen({navigation}: Props) {
     setBuildings3d(false);
   }, [routeKey]);
 
-  const previewRoute = (place: Place) => {
+  const previewRoute = useCallback((place: Place) => {
     place = snapPlaceToHouse(place);
     setTarget(place);
     setPicking(false);
@@ -241,7 +221,7 @@ export function MapScreen({navigation}: Props) {
         }
       })
       .catch(() => undefined);
-  };
+  }, []);
 
   useEffect(() => {
     const place = useLinkStore.getState().pending;
@@ -281,7 +261,7 @@ export function MapScreen({navigation}: Props) {
     };
   }, []);
 
-  const addStop = (place: Place) => {
+  const addStop = useCallback((place: Place) => {
     const dest = destinationPlace(target, destinationName);
     if (!dest) {
       return;
@@ -295,12 +275,12 @@ export function MapScreen({navigation}: Props) {
         }
       })
       .catch(() => undefined);
-  };
+  }, [destinationName, target]);
 
-  const depart = () => {
+  const depart = useCallback(() => {
     confirmTrip().catch(() => undefined);
     setHeadingUp(true);
-    zoomRef.current = zoomFor(useSettingsStore.getState().baseZoom, useSessionStore.getState().snapshot?.speedMps ?? 0, turnRate.current);
+    zoomRef.current = zoomFor(useSettingsStore.getState().baseZoom, useSessionStore.getState().snapshot?.speedMps ?? 0);
     setZoomToken(token => token + 1);
     movedAt.current = Date.now();
     useSessionStore.getState().setFollow(true);
@@ -311,9 +291,9 @@ export function MapScreen({navigation}: Props) {
     if (dest) {
       saveOpenNav({destination: dest, stops: useSessionStore.getState().stops}).catch(() => undefined);
     }
-  };
+  }, [destinationName, target]);
 
-  const cancelTrip = () => {
+  const cancelTrip = useCallback(() => {
     if (arriveHold.current) {
       clearTimeout(arriveHold.current);
       arriveHold.current = null;
@@ -329,7 +309,125 @@ export function MapScreen({navigation}: Props) {
     useSessionStore.getState().resetRoute();
     clearOpenNav().catch(() => undefined);
     NativeTripSession?.stopNavigation();
-  };
+  }, []);
+
+  const onBuildings = useCallback(() => {
+    setBuildings3d(current => {
+      const next = !current;
+      if (next && zoomRef.current < 15.5) {
+        zoomRef.current = 16.2;
+        setZoomToken(token => token + 1);
+      }
+      return next;
+    });
+  }, []);
+  const onOverview = useCallback(() => {
+    useSessionStore.getState().setFollow(false);
+    setFitToken(token => token + 1);
+  }, []);
+  const onHeading = useCallback(() => {
+    setHeadingUp(true);
+    movedAt.current = Date.now();
+    useSessionStore.getState().setFollow(true);
+  }, []);
+  const onNorth = useCallback(() => setHeadingUp(false), []);
+  const onLock = useCallback(() => {
+    const session = useSessionStore.getState();
+    if (session.manualLock) {
+      session.unlockPosition();
+      return;
+    }
+    if (session.displayLatitude == null || session.displayLongitude == null) {
+      return;
+    }
+    session.lockPosition(
+      session.displayLatitude,
+      session.displayLongitude,
+      session.snapshot?.heading ?? 0,
+      true,
+    );
+  }, []);
+  const openAlong = useCallback(() => setAlongOpen(true), []);
+  const onFollow = useCallback(() => {
+    const settings = useSettingsStore.getState();
+    if (!settings.keepManualZoom) {
+      const speed = useSessionStore.getState().snapshot?.speedMps ?? 0;
+      zoomRef.current = zoomFor(settings.baseZoom, speed);
+      setZoomToken(token => token + 1);
+    }
+    movedAt.current = Date.now();
+    useSessionStore.getState().setFollow(true);
+  }, []);
+  const onZoomIn = useCallback(() => {
+    zoomRef.current = Math.min(18, zoomRef.current + 1);
+    movedAt.current = Date.now();
+    setZoomToken(token => token + 1);
+  }, []);
+  const onZoomOut = useCallback(() => {
+    zoomRef.current = Math.max(12, zoomRef.current - 1);
+    movedAt.current = Date.now();
+    setZoomToken(token => token + 1);
+  }, []);
+  const handleMapPress = useCallback(
+    (pressLongitude: number, pressLatitude: number) => {
+      previewRoute({
+        id: `pin-${pressLongitude.toFixed(5)}-${pressLatitude.toFixed(5)}`,
+        name: uiCopy(useSettingsStore.getState().language).mapPoint,
+        latitude: pressLatitude,
+        longitude: pressLongitude,
+        kind: 'pin',
+      });
+    },
+    [previewRoute],
+  );
+  const onPlaceGo = useCallback(
+    (place: NearbyPlace) => {
+      previewRoute({
+        id: place.id,
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        kind: place.kind,
+      });
+    },
+    [previewRoute],
+  );
+  const onGesture = useCallback((holding: boolean, zoom: number) => {
+    touching.current = holding;
+    if (holding) {
+      zoomRef.current = zoom;
+      useSessionStore.getState().setFollow(false);
+      if (useSessionStore.getState().driving) {
+        useSessionStore.getState().bumpHud();
+      }
+    }
+  }, []);
+  const onUserMove = useCallback((zoom: number) => {
+    touching.current = false;
+    zoomRef.current = zoom;
+    movedAt.current = Date.now();
+    useSessionStore.getState().setFollow(false);
+  }, []);
+  const pickWhileDriving = useCallback((picked: RoutePlan) => chooseRoute(picked, true), []);
+  const pickPreviewRoute = useCallback((picked: RoutePlan) => chooseRoute(picked, driving), [driving]);
+  const togglePicking = useCallback(() => setPicking(value => !value), []);
+  const goToTarget = useCallback(() => {
+    if (!target) {
+      return;
+    }
+    Keyboard.dismiss();
+    previewRoute(target);
+  }, [previewRoute, target]);
+  const startSearch = useCallback(() => setSearching(true), []);
+  const closeSearch = useCallback(() => setSearching(false), []);
+  const closeAlong = useCallback(() => setAlongOpen(false), []);
+  const chooseAlong = useCallback(
+    (place: Place) => {
+      setAlongOpen(false);
+      addStop(place);
+    },
+    [addStop],
+  );
 
   const alongM = route && located ? progressAlong(route.coordinates, shownLat, shownLon) : 0;
   const remainingM = route ? Math.max(0, route.distanceM - alongM) : traveledM;
@@ -450,50 +548,16 @@ export function MapScreen({navigation}: Props) {
         showUncertainty={drActive}
         route={route}
         alternatives={alternatives}
-        onAlternative={picked => chooseRoute(picked, driving)}
+        onAlternative={pickPreviewRoute}
         zoomRef={zoomRef}
         zoomToken={zoomToken}
         destination={target}
         destinationPin={target?.kind === 'pin'}
         stops={stops}
-        onMapPress={
-          picking
-            ? (pressLongitude, pressLatitude) => {
-                previewRoute({
-                  id: `pin-${pressLongitude.toFixed(5)}-${pressLatitude.toFixed(5)}`,
-                  name: copy.mapPoint,
-                  latitude: pressLatitude,
-                  longitude: pressLongitude,
-                  kind: 'pin',
-                });
-              }
-            : undefined
-        }
-        onPlaceGo={place => {
-          previewRoute({
-            id: place.id,
-            name: place.name,
-            latitude: place.latitude,
-            longitude: place.longitude,
-            kind: place.kind,
-          });
-        }}
-        onGesture={(holding, zoom) => {
-          touching.current = holding;
-          if (holding) {
-            zoomRef.current = zoom;
-            useSessionStore.getState().setFollow(false);
-            if (driving) {
-              useSessionStore.getState().bumpHud();
-            }
-          }
-        }}
-        onUserMove={zoom => {
-          touching.current = false;
-          zoomRef.current = zoom;
-          movedAt.current = Date.now();
-          useSessionStore.getState().setFollow(false);
-        }}
+        onMapPress={picking ? handleMapPress : undefined}
+        onPlaceGo={onPlaceGo}
+        onGesture={onGesture}
+        onUserMove={onUserMove}
       />
       ) : null}
       {farFromRoads ? (
@@ -547,87 +611,22 @@ export function MapScreen({navigation}: Props) {
         driving={driving}
         buildings3d={buildings3d}
         headingUp={headingUp}
-        onBuildings={() => {
-          const next = !buildings3d;
-          if (next && zoomRef.current < 15.5) {
-            zoomRef.current = 16.2;
-            setZoomToken(token => token + 1);
-          }
-          setBuildings3d(next);
-        }}
-        onOverview={() => {
-          useSessionStore.getState().setFollow(false);
-          setFitToken(token => token + 1);
-        }}
-        onHeading={() => {
-          setHeadingUp(true);
-          movedAt.current = Date.now();
-          useSessionStore.getState().setFollow(true);
-        }}
-        onNorth={() => setHeadingUp(false)}
-        onLock={() => {
-          const session = useSessionStore.getState();
-          if (session.manualLock) {
-            session.unlockPosition();
-            return;
-          }
-          if (session.displayLatitude == null || session.displayLongitude == null) {
-            return;
-          }
-          session.lockPosition(
-            session.displayLatitude,
-            session.displayLongitude,
-            session.snapshot?.heading ?? shownHeading,
-            true,
-          );
-        }}
-        onAlong={() => setAlongOpen(true)}
-        onFollow={() => {
-          const settings = useSettingsStore.getState();
-          if (!settings.keepManualZoom) {
-            const speed = snapshot?.speedMps ?? 0;
-            zoomRef.current = zoomFor(settings.baseZoom, speed, turnRate.current);
-            setZoomToken(token => token + 1);
-          }
-          movedAt.current = Date.now();
-          useSessionStore.getState().setFollow(true);
-        }}
-        onZoomIn={() => {
-          zoomRef.current = Math.min(18, zoomRef.current + 1);
-          movedAt.current = Date.now();
-          setZoomToken(token => token + 1);
-        }}
-        onZoomOut={() => {
-          zoomRef.current = Math.max(12, zoomRef.current - 1);
-          movedAt.current = Date.now();
-          setZoomToken(token => token + 1);
-        }}
+        onBuildings={onBuildings}
+        onOverview={onOverview}
+        onHeading={onHeading}
+        onNorth={onNorth}
+        onLock={onLock}
+        onAlong={openAlong}
+        onFollow={onFollow}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
       />
       {driving ? <TripReadout limitKmh={limitKmh} night={nightMap} cameraM={cameraM} /> : null}
-      {!driving && route && missingMaps.length > 0 ? (
-        <View style={styles.needBanner}>
-          <Text style={styles.needTitle}>{copy.mapsNeed}</Text>
-          <Text style={styles.needBody}>
-            {`${formatRegionList(missingMaps.map(item => item.name), resolveLanguage(language))}. ${copy.mapsNeedBody}`}
-          </Text>
-          <View style={styles.needRow}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                missingMaps.forEach(region => {
-                  downloadRegion(region).catch(() => undefined);
-                });
-              }}
-              style={styles.needAction}>
-              <Text style={styles.needActionText}>{copy.mapsNeedAction}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation.navigate('Maps', {need: missingMaps.map(item => item.id)})}>
-              <Text style={styles.needLink}>{copy.maps}</Text>
-            </Pressable>
-          </View>
-        </View>
+      {!driving && route ? (
+        <RouteNeedBanner
+          missing={missingMaps}
+          onMaps={() => navigation.navigate('Maps', {need: missingMaps.map(item => item.id)})}
+        />
       ) : null}
       {driving && edgeGap ? (
         <View style={styles.edgeBanner} pointerEvents="none">
@@ -664,13 +663,13 @@ export function MapScreen({navigation}: Props) {
           others={alternatives}
           wake={hudWake}
           parkingNear={nearDest}
-          onAlong={() => setAlongOpen(true)}
-          onPick={picked => chooseRoute(picked, true)}
+          onAlong={openAlong}
+          onPick={pickWhileDriving}
           onEnd={cancelTrip}
         />
       ) : (
-        <BottomSheet aboveTabs light lift={searching ? 0 : keyboard}>
-          {locked ? <Text style={styles.lockNote}>{copy.parked}</Text> : null}
+        <BottomSheet aboveTabs lift={searching ? 0 : keyboard}>
+          {locked ? <Text style={[styles.lockNote, {color: colors.textSecondary}]}>{copy.parked}</Text> : null}
           {route ? (
             <TripPanel
               key={previewKey}
@@ -688,18 +687,12 @@ export function MapScreen({navigation}: Props) {
               navigating={false}
               picking={picking}
               target={target}
-              onPickToggle={() => setPicking(value => !value)}
-              onTarget={place => previewRoute(place)}
-              onGo={() => {
-                if (!target) {
-                  return;
-                }
-                Keyboard.dismiss();
-                previewRoute(target);
-              }}
+              onPickToggle={togglePicking}
+              onTarget={previewRoute}
+              onGo={goToTarget}
               onStop={cancelTrip}
-              onFocus={() => setSearching(true)}
-              onSearchClose={() => setSearching(false)}
+              onFocus={startSearch}
+              onSearchClose={closeSearch}
             />
           )}
         </BottomSheet>
@@ -710,11 +703,8 @@ export function MapScreen({navigation}: Props) {
           route={route}
           here={{latitude: shownLat, longitude: shownLon}}
           nearDest={nearDest}
-          onClose={() => setAlongOpen(false)}
-          onChoose={place => {
-            setAlongOpen(false);
-            addStop(place);
-          }}
+          onClose={closeAlong}
+          onChoose={chooseAlong}
         />
       ) : null}
     </View>
@@ -736,12 +726,6 @@ function destinationPlace(target: Place | null, name: string | null): Place | nu
     kind: target?.kind ?? 'place',
     detail: target?.detail,
   };
-}
-
-function zoomFor(base: number, speedMps: number, turnDegPerSec: number): number {
-  const wider = Math.min(3, (Math.max(0, speedMps) * 3.6) / 30);
-  const turn = Math.min(1.5, Math.abs(turnDegPerSec) / 30);
-  return Math.min(18, Math.max(12, base - wider + turn));
 }
 
 const styles = StyleSheet.create({
@@ -787,7 +771,7 @@ const styles = StyleSheet.create({
   },
   routeMissingTitle: {...type.bodyStrong, color: '#1C1430', textAlign: 'center'},
   routeMissingNote: {...type.caption, color: '#1C1430', textAlign: 'center'},
-  lockNote: {...type.caption, color: '#655C78'},
+  lockNote: {...type.caption},
   pickHint: {
     position: 'absolute',
     top: 116,
@@ -798,29 +782,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pickHintText: {color: '#FFFFFF', fontWeight: '700', fontSize: 13},
-  needBanner: {
-    position: 'absolute',
-    left: 16,
-    right: 78,
-    top: 54,
-    zIndex: 6,
-    backgroundColor: '#1C1430',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 4,
-  },
-  needTitle: {...type.bodyStrong, color: '#FFFFFF'},
-  needBody: {...type.caption, color: '#F3F0FA'},
-  needRow: {flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 4},
-  needAction: {
-    backgroundColor: '#149C96',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  needActionText: {color: '#FFFFFF', fontWeight: '700', fontSize: 13},
-  needLink: {color: '#C8C0DC', fontWeight: '600', fontSize: 13},
   edgeBanner: {
     position: 'absolute',
     left: 16,

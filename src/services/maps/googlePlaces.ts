@@ -54,12 +54,15 @@ export async function googleSuggest(query: string, language: 'uk' | 'ru', bias: 
   });
   if (wantedHouse(text)) {
     params.set('types', 'address');
+  } else {
+    params.set('types', 'geocode');
   }
   if (bias) {
     const spot = `${bias.latitude.toFixed(5)},${bias.longitude.toFixed(5)}`;
     params.set('location', spot);
-    params.set('radius', '80000');
+    params.set('radius', '25000');
     params.set('origin', spot);
+    params.set('strictbounds', 'true');
   }
   const response = await fetch(`${BASE}/autocomplete/json?${params.toString()}`, {headers: HEADERS});
   if (!response.ok) {
@@ -137,11 +140,11 @@ function kindOf(types: string[]): string {
   if (types.includes('street_address') || types.includes('premise') || types.includes('subpremise')) {
     return 'house';
   }
-  if (types.includes('route')) {
-    return 'street';
-  }
   if (types.includes('locality') || types.includes('sublocality') || types.includes('administrative_area_level_1')) {
     return 'city';
+  }
+  if (types.includes('route') || types.includes('geocode')) {
+    return 'street';
   }
   return 'poi';
 }

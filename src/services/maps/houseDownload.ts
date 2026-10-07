@@ -10,6 +10,7 @@ import {
   throwIfPaused,
   trackAbort,
 } from './downloadPause';
+import {mapLimitVoid, withOverpass} from './overpassGate';
 import {
   addHouses,
   boundsArea,
@@ -26,6 +27,7 @@ const MANIFEST_KEY = 'neiv.houses.v1';
 const HOUSE_TILE_AREA = 0.02;
 const ENDPOINTS = [
   'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
 ];
 const MAX_SPLIT = 8;
@@ -96,11 +98,30 @@ export async function downloadRegionHouses(
   const bounds = {west: region.west, south: region.south, east: region.east, north: region.north};
   const total = Math.max(boundsArea(bounds), 0.000001);
   let covered = 0;
+  let writes = 0;
+  let persist = Promise.resolve();
   const mark = (piece: Bounds) => {
     covered += boundsArea(piece);
     onProgress(Math.max(0, Math.min(1, covered / total)));
   };
-  await walk(bounds, 0);
+  const flushManifest = (complete: boolean) => {
+    persist = persist.then(() => {
+      manifest[region.id] = {tiles: Array.from(done), complete};
+      return AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
+    });
+    return persist;
+  };
+  const noteTile = () => {
+    writes += 1;
+    return writes % 4 === 0 ? flushManifest(false) : Promise.resolve();
+  };
+  let finished = false;
+  try {
+    await walk(bounds, 0);
+    finished = true;
+  } finally {
+    await flushManifest(finished);
+  }
   async function walk(piece: Bounds, depth: number): Promise<void> {
     throwIfPaused(stamp);
     const id = tileId(piece);
@@ -109,9 +130,7 @@ export async function downloadRegionHouses(
       return;
     }
     if (boundsArea(piece) > HOUSE_TILE_AREA && depth < MAX_SPLIT) {
-      for (const part of splitBounds(piece)) {
-        await walk(part, depth + 1);
-      }
+      await mapLimitVoid(splitBounds(piece), part => walk(part, depth + 1));
       return;
     }
     try {
@@ -122,8 +141,7 @@ export async function downloadRegionHouses(
       await writeTile(region.id, id, points);
       addHouses(points);
       done.add(id);
-      manifest[region.id] = {tiles: Array.from(done), complete: false};
-      await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
+      await noteTile();
       mark(piece);
     } catch (error) {
       if (isDownloadPaused(error)) {
@@ -133,19 +151,15 @@ export async function downloadRegionHouses(
       if (depth >= MAX_SPLIT || tiny) {
         throw error;
       }
-      for (const part of splitBounds(piece)) {
-        await walk(part, depth + 1);
-      }
+      await mapLimitVoid(splitBounds(piece), part => walk(part, depth + 1));
     }
   }
-  manifest[region.id] = {tiles: Array.from(done), complete: true};
-  await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
   return done.size;
 }
 
 async function fetchBounds(bounds: Bounds): Promise<HousePoint[]> {
   const box = `${bounds.south},${bounds.west},${bounds.north},${bounds.east}`;
-  const query = `[out:json][timeout:40];(node["addr:housenumber"](${box});way["addr:housenumber"](${box});way["addr:interpolation"](${box}););out body center;>;out skel qt;`;
+  const query = `[out:json][timeout:18];(node["addr:housenumber"](${box});way["addr:housenumber"](${box});way["addr:interpolation"](${box});node["entrance"](${box}););out body center qt;>;out skel qt;`;
   let lastError: unknown = new Error('addresses unavailable');
   for (const endpoint of ENDPOINTS) {
     try {
@@ -159,6 +173,10 @@ async function fetchBounds(bounds: Bounds): Promise<HousePoint[]> {
         throw error;
       }
       lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (/payload too big|payload timeout|address tile incomplete/i.test(message)) {
+        throw error;
+      }
     }
   }
   throw lastError;
@@ -169,21 +187,27 @@ async function postOverpass(endpoint: string, query: string): Promise<unknown> {
   noteDownloadPulse();
   const controller = new AbortController();
   const release = trackAbort(controller);
-  const timer = setTimeout(() => controller.abort(), 22_000);
+  const timer = setTimeout(() => controller.abort(), 28_000);
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Navi/1.0 (offline house download)',
-      },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
+    return await withOverpass(async () => {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Navi/1.0 (offline house download)',
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        if (response.status === 429 || response.status === 502 || response.status === 504) {
+          await new Promise<void>(resolve => setTimeout(resolve, 1_800));
+        }
+        throw new Error(`address request ${response.status}`);
+      }
+      noteDownloadPulse();
+      return readBoundedJson(response, undefined, () => controller.abort());
     });
-    if (!response.ok) {
-      throw new Error(`address request ${response.status}`);
-    }
-    return await readBoundedJson(response, undefined, () => controller.abort());
   } catch (error) {
     if (stamp !== downloadGeneration()) {
       throw new DownloadPaused();
@@ -238,7 +262,7 @@ async function readTile(regionId: string, id: string): Promise<HousePoint[] | nu
       if (!Array.isArray(row) || row.length < 5) {
         return;
       }
-      const [street, house, city, latitude, longitude] = row;
+      const [street, house, city, latitude, longitude, entrance] = row;
       if (typeof street !== 'string' || typeof house !== 'string') {
         return;
       }
@@ -251,6 +275,7 @@ async function readTile(regionId: string, id: string): Promise<HousePoint[] | nu
         city: typeof city === 'string' ? city : '',
         latitude,
         longitude,
+        entrance: typeof entrance === 'string' && entrance.length > 0 ? entrance : undefined,
       });
     });
     return points;
@@ -266,6 +291,7 @@ async function writeTile(regionId: string, id: string, points: HousePoint[]): Pr
     point.city,
     Number(point.latitude.toFixed(6)),
     Number(point.longitude.toFixed(6)),
+    point.entrance ?? '',
   ]);
   const raw = JSON.stringify(compact);
   if (jsonTooBig(raw)) {

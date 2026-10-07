@@ -1,3 +1,4 @@
+import {memo} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import Svg, {Path} from 'react-native-svg';
 
@@ -26,7 +27,7 @@ type Props = {
   onAlong?: () => void;
 };
 
-export function MapControls({
+export const MapControls = memo(function MapControls({
   follow,
   locked,
   road,
@@ -51,19 +52,27 @@ export function MapControls({
   if (road) {
     return (
       <View style={styles.column}>
-        <Pressable accessibilityRole="button" accessibilityLabel={copy.follow} onPress={onFollow} style={styles.roadButton}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy.follow}
+          onPress={onFollow}
+          style={[styles.roadButton, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
           <LocateGlyph />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={copy.overview} onPress={onOverview} style={styles.roadOn}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy.overview}
+          onPress={onOverview}
+          style={[styles.roadOn, {backgroundColor: colors.accent, shadowColor: colors.accent}]}>
           <RouteGlyph />
         </Pressable>
-        <View style={styles.compass}>
+        <View style={[styles.compass, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
           <Pressable accessibilityRole="button" accessibilityLabel={copy.heading} onPress={onHeading} style={styles.compassHalf}>
-            <NavArrow color={headingUp ? '#149C96' : '#8AA8A6'} />
+            <NavArrow color={headingUp ? colors.accent : colors.textMuted} />
           </Pressable>
-          <View style={styles.compassLine} />
+          <View style={[styles.compassLine, {backgroundColor: colors.border}]} />
           <Pressable accessibilityRole="button" accessibilityLabel={copy.north} onPress={onNorth} style={styles.compassHalf}>
-            <NorthArrow color={headingUp ? '#8AA8A6' : '#149C96'} />
+            <NorthArrow color={headingUp ? colors.textMuted : colors.accent} />
           </Pressable>
         </View>
         {driving && onAlong ? (
@@ -71,8 +80,8 @@ export function MapControls({
             accessibilityRole="button"
             accessibilityLabel={copy.alongRoute}
             onPress={onAlong}
-            style={styles.dimension}>
-            <Text style={styles.dimensionLabel}>{copy.alongGas}</Text>
+            style={[styles.dimension, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
+            <Text style={[styles.dimensionLabel, {color: colors.textPrimary}]}>{copy.alongGas}</Text>
           </Pressable>
         ) : null}
         {driving ? (
@@ -80,8 +89,8 @@ export function MapControls({
             accessibilityRole="button"
             accessibilityLabel={buildings3d ? copy.housesFlat : copy.housesSolid}
             onPress={onBuildings}
-            style={styles.dimension}>
-            <Text style={styles.dimensionLabel}>{buildings3d ? '3D' : '2D'}</Text>
+            style={[styles.dimension, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
+            <Text style={[styles.dimensionLabel, {color: colors.textPrimary}]}>{buildings3d ? '3D' : '2D'}</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -94,8 +103,8 @@ export function MapControls({
               stopManeuverSpeech();
             }
           }}
-          style={styles.speakerButton}>
-          <SpeakerGlyph muted={!voice} />
+          style={[styles.speakerButton, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
+          <SpeakerGlyph muted={!voice} color={colors.textPrimary} cutout={colors.surface} />
         </Pressable>
       </View>
     );
@@ -119,7 +128,7 @@ export function MapControls({
       </Pressable>
     </View>
   );
-}
+});
 
 function LockGlyph({color}: {color: string}) {
   return (
@@ -149,6 +158,8 @@ const styles = StyleSheet.create({
     top: 120,
     alignItems: 'flex-end',
     gap: 10,
+    zIndex: 30,
+    elevation: 30,
   },
   button: {
     width: 48,
@@ -376,33 +387,31 @@ const voiceCopy = {
   ru: {on: 'Включить звук', off: 'Выключить звук'},
 };
 
-const speakerInk = '#1C1430';
-
-function SpeakerGlyph({muted}: {muted: boolean}) {
+function SpeakerGlyph({muted, color, cutout}: {muted: boolean; color: string; cutout: string}) {
   return (
     <Svg width={30} height={30} viewBox="0 0 24 24">
       <Path
         d="M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"
-        fill={speakerInk}
+        fill={color}
       />
       {muted ? (
         <>
-          <Path d="M20.2 5.1L5.2 19.4" stroke="#FFFFFF" strokeWidth={3.6} strokeLinecap="round" />
-          <Path d="M20.2 5.1L5.2 19.4" stroke={speakerInk} strokeWidth={1.8} strokeLinecap="round" />
+          <Path d="M20.2 5.1L5.2 19.4" stroke={cutout} strokeWidth={3.6} strokeLinecap="round" />
+          <Path d="M20.2 5.1L5.2 19.4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
         </>
       ) : (
         <>
           <Path
             d="M16.46 8.29a5.25 5.25 0 010 7.42"
             fill="none"
-            stroke={speakerInk}
+            stroke={color}
             strokeWidth={1.7}
             strokeLinecap="round"
           />
           <Path
             d="M19.11 5.64a9 9 0 010 12.72"
             fill="none"
-            stroke={speakerInk}
+            stroke={color}
             strokeWidth={1.7}
             strokeLinecap="round"
           />

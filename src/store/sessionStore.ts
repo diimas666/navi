@@ -2,6 +2,7 @@ import {create} from 'zustand';
 
 import {uiCopy} from '../i18n/uiCopy';
 import type {Place, RoutePlan, TrustLevel} from '../models/domain';
+import {liveFixQuiet} from '../services/navigation/liveFix';
 import {useSettingsStore} from './settingsStore';
 import type {NativeSnapshot} from '../native/NativeTripSession';
 
@@ -31,6 +32,14 @@ type SessionState = {
   lockHeading: number;
   setSnapshot: (snapshot: NativeSnapshot) => void;
   setDisplay: (latitude: number, longitude: number, roadName: string | null, applied: boolean, crossTrackM: number | null) => void;
+  setLiveFix: (
+    snapshot: NativeSnapshot,
+    latitude: number,
+    longitude: number,
+    roadName: string | null,
+    applied: boolean,
+    crossTrackM: number | null,
+  ) => void;
   setRoute: (
     route: RoutePlan | null,
     destinationName: string | null,
@@ -75,6 +84,12 @@ export const useSessionStore = create<SessionState>(set => ({
   setSnapshot: snapshot => set({snapshot}),
   setDisplay: (displayLatitude, displayLongitude, roadName, roadApplied, crossTrackM) =>
     set({displayLatitude, displayLongitude, roadName, roadApplied, crossTrackM}),
+  setLiveFix: (snapshot, displayLatitude, displayLongitude, roadName, roadApplied, crossTrackM) =>
+    set(state =>
+      liveFixQuiet(state, snapshot, displayLatitude, displayLongitude, roadName, roadApplied, crossTrackM)
+        ? state
+        : {snapshot, displayLatitude, displayLongitude, roadName, roadApplied, crossTrackM},
+    ),
   setRoute: (route, destinationName, at) =>
     set({
       route,

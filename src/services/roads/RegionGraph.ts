@@ -83,8 +83,23 @@ export function waysToNetwork(ways: RoadWay[], maxSegments = MAX_SEGMENTS): Road
   return {nodes: Array.from(nodes.values()), edges};
 }
 
-export function highwayFilter(_region: RegionDefinition): string {
-  return 'motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service';
+const MAIN_HIGHWAYS =
+  'motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street';
+
+export function highwayFilter(_region: RegionDefinition, includeService = false): string {
+  return includeService ? `${MAIN_HIGHWAYS}|service` : MAIN_HIGHWAYS;
+}
+
+export function streetTileIncludesService(area: number): boolean {
+  return area <= 0.008;
+}
+
+export function shouldSplitStreetTile(error: unknown): boolean {
+  if (error instanceof Error && (error.name === 'AbortError' || /aborted/i.test(error.message))) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /payload too big|payload timeout|street tile incomplete|street tile timeout/i.test(message);
 }
 
 export function parseOverpass(payload: unknown): RoadWay[] {

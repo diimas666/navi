@@ -123,18 +123,45 @@ export function currentStreet(route: RoutePlan, progressM: number, generic = '')
   return name;
 }
 
+let progressLine: Array<[number, number]> | null = null;
+let progressIndex = 0;
+const PROGRESS_LOOK = 180;
+
 function progressOnLine(
   coordinates: Array<[number, number]>,
   latitude: number,
   longitude: number,
 ): {alongM: number; index: number; latitude: number; longitude: number} {
+  const hinted = progressLine === coordinates ? Math.max(0, progressIndex - 2) : 0;
+  const nearby = scanLine(coordinates, latitude, longitude, hinted, hinted + PROGRESS_LOOK);
+  const missed = nearby.offM > 80;
+  const atWindow = nearby.index >= hinted + PROGRESS_LOOK - 3 && nearby.offM > 24;
+  const hit = missed || atWindow ? scanLine(coordinates, latitude, longitude, 0, coordinates.length) : nearby;
+  progressLine = coordinates;
+  progressIndex = hit.index;
+  return hit;
+}
+
+function scanLine(
+  coordinates: Array<[number, number]>,
+  latitude: number,
+  longitude: number,
+  startIndex: number,
+  stopIndex: number,
+): {alongM: number; index: number; latitude: number; longitude: number; offM: number} {
   let bestOff = Infinity;
   let bestAlong = 0;
-  let bestIndex = 0;
+  let bestIndex = startIndex;
   let bestLat = latitude;
   let bestLon = longitude;
   let along = 0;
-  for (let index = 1; index < coordinates.length; index += 1) {
+  const last = Math.min(coordinates.length, Math.max(startIndex + 2, stopIndex));
+  for (let index = 1; index <= startIndex; index += 1) {
+    const [lonA, latA] = coordinates[index - 1];
+    const [lonB, latB] = coordinates[index];
+    along += haversineMeters(latA, lonA, latB, lonB);
+  }
+  for (let index = Math.max(1, startIndex + 1); index < last; index += 1) {
     const [lonA, latA] = coordinates[index - 1];
     const [lonB, latB] = coordinates[index];
     const segment = haversineMeters(latA, lonA, latB, lonB);
@@ -148,7 +175,7 @@ function progressOnLine(
     }
     along += segment;
   }
-  return {alongM: bestAlong, index: bestIndex, latitude: bestLat, longitude: bestLon};
+  return {alongM: bestAlong, index: bestIndex, latitude: bestLat, longitude: bestLon, offM: bestOff};
 }
 
 function stepCue(step: RouteStep, meters: number, text: (typeof words)['uk']): ManeuverCue {

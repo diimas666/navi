@@ -94,10 +94,16 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={downloaded ? text.confirm : text.download}
-              disabled={busy === item.id}
+              disabled={busy === item.id && !downloading}
               onPress={() => {
                 if (downloaded && !stale) {
                   setConfirmId(item.id);
+                  return;
+                }
+                if (downloading) {
+                  downloadRegion(item).catch(error =>
+                    useUiStore.getState().showToast(toAppError(error, 'OFFLINE_MAP_ERROR').userMessage),
+                  );
                   return;
                 }
                 setBusy(item.id);

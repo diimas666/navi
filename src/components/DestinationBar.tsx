@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
+import {memo, useEffect, useRef, useState} from 'react';
 import {
   Keyboard,
   Modal,
@@ -17,8 +17,10 @@ import {uiCopy} from '../i18n/uiCopy';
 import type {Place} from '../models/domain';
 import NativeTripSession from '../native/NativeTripSession';
 import {useSettingsStore} from '../store/settingsStore';
+import {wantedHouse} from '../services/maps/addressQuery';
 import {googleSearchOn, suggestPlaces, suggestPlacesNow} from '../services/maps/Geocoder';
 import {googleResolve, hasCoordinates} from '../services/maps/googlePlaces';
+import {searchHousesOnStreet} from '../services/maps/houses';
 import {placeFromClipboard} from '../services/maps/clipboardPlace';
 import {searchEmptyHint, searchLiveHint, searchScope} from '../services/maps/searchScope';
 import {asPlace, matchesHistory, type HistoryPlace} from '../services/search/searchHistory';
@@ -45,7 +47,7 @@ type Props = {
   onSearchClose: () => void;
 };
 
-export function DestinationBar({
+export const DestinationBar = memo(function DestinationBar({
   navigating,
   picking,
   target,
@@ -121,11 +123,9 @@ export function DestinationBar({
     const typed = value.trim().length >= 2;
     if (!typed) {
       setResults([]);
-    } else if (!googleSearchOn()) {
-      // Offline: downloaded streets answer on the spot.
+    } else {
       setResults(suggestPlacesNow(value));
     }
-    // Online: keep the previous rows until Google answers, so the list does not flash.
     setEmpty(false);
     if (pending.current) {
       clearTimeout(pending.current);
@@ -135,7 +135,7 @@ export function DestinationBar({
     }
     pending.current = setTimeout(() => {
       runLookup(value).catch(() => undefined);
-    }, googleSearchOn() ? 60 : 180);
+    }, googleSearchOn() ? 90 : 0);
   };
 
   const runLookup = async (value: string) => {
@@ -190,6 +190,18 @@ export function DestinationBar({
       lookup(place.name);
       return;
     }
+    if (place.kind === 'street' && !wantedHouse(query)) {
+      const houses = searchHousesOnStreet(place.name);
+      if (houses.length > 0) {
+        const next = `${place.name} `;
+        setQuery(next);
+        asked.current = next;
+        setResults(houses);
+        setEmpty(false);
+        setClip(null);
+        return;
+      }
+    }
     // The street name appears in the bar at once. The route follows when the point arrives.
     setQuery(place.name);
     setResults([]);
@@ -238,11 +250,11 @@ export function DestinationBar({
   };
 
   const pinStyle = {
-    backgroundColor: picking ? colors.accent : '#FFFFFF',
+    backgroundColor: picking ? colors.accent : colors.surface,
     borderColor: picking ? colors.accent : colors.border,
   };
   const goStyle = {
-    backgroundColor: target ? colors.accent : '#E7E0F6',
+    backgroundColor: target ? colors.accent : colors.accentSoft,
     borderColor: 'transparent',
   };
 
@@ -253,7 +265,7 @@ export function DestinationBar({
           accessibilityRole="button"
           accessibilityLabel={copy.where}
           onPress={openSearch}
-          style={[styles.fieldShell, styles.opener, {backgroundColor: colors.surfaceMuted}]}>
+          style={[styles.fieldShell, styles.opener, {backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1}]}>
           <SearchGlyph color={colors.textMuted} />
           <Text numberOfLines={1} style={[styles.openerText, {color: query ? colors.textPrimary : colors.textMuted}]}>
             {query || copy.where}
@@ -264,7 +276,7 @@ export function DestinationBar({
           accessibilityLabel={copy.destPin}
           onPress={onPickToggle}
           style={[styles.iconButton, pinStyle]}>
-          <MapPin color={picking ? '#FFFFFF' : colors.accent} />
+          <MapPin color={picking ? colors.onAccent : colors.accent} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -272,7 +284,7 @@ export function DestinationBar({
           disabled={!target}
           onPress={onGo}
           style={[styles.iconButton, goStyle]}>
-          <GoArrow color={target ? '#FFFFFF' : '#948BA6'} />
+          <GoArrow color={target ? colors.onAccent : colors.textMuted} />
         </Pressable>
       </View>
       {navigating ? (
@@ -310,7 +322,7 @@ export function DestinationBar({
       />
     </View>
   );
-}
+});
 
 function SearchSheet({
   open,
@@ -363,7 +375,7 @@ function SearchSheet({
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modal}>
-        <Pressable accessibilityRole="button" onPress={onClose} style={styles.backdrop} />
+        <Pressable accessibilityRole="button" onPress={onClose} style={[styles.backdrop, {backgroundColor: colors.scrim}]} />
         <View
           style={[
             styles.sheet,
@@ -371,7 +383,7 @@ function SearchSheet({
               height: room,
               marginBottom: keyboard,
               paddingBottom: keyboard > 0 ? 12 : Math.max(bottomInset, 12),
-              backgroundColor: '#FBFAFE',
+              backgroundColor: colors.backgroundRaised,
             },
           ]}>
           <View style={[styles.sheetHandle, {backgroundColor: colors.border}]} />
@@ -382,9 +394,9 @@ function SearchSheet({
               onPress={onClose}
               hitSlop={8}
               style={styles.back}>
-              <Text style={styles.backMark}>{'‹'}</Text>
+              <Text style={[styles.backMark, {color: colors.textPrimary}]}>{'‹'}</Text>
             </Pressable>
-            <View style={[styles.fieldShell, styles.sheetField, {backgroundColor: '#FFFFFF'}]}>
+            <View style={[styles.fieldShell, styles.sheetField, {backgroundColor: colors.surface, borderColor: colors.border}]}>
               <SearchGlyph color={colors.textMuted} />
               {open ? (
                 <TextInput
@@ -424,18 +436,23 @@ function SearchSheet({
           {liveHint ? (
             <Text style={[type.caption, {color: colors.textSecondary}]}>{liveHint}</Text>
           ) : null}
+          {results.length > 0 ? (
+            <Text style={[type.caption, styles.recentLabel, {color: colors.textMuted}]}>
+              {results.some(place => place.kind === 'house') ? copy.searchPickHouse : copy.searchPickStreet}
+            </Text>
+          ) : null}
           {empty && results.length === 0 && recents.length === 0 && !clipShown ? (
             <Text style={[type.caption, {color: colors.textSecondary}]}>{emptyHint}</Text>
           ) : null}
           <ScrollView keyboardShouldPersistTaps="always" style={styles.results} contentContainerStyle={styles.resultsContent}>
             {clipShown && clip ? (
               <>
-                <Text style={[type.caption, styles.recentLabel, {color: colors.textSecondary}]}>{copy.clipboardJust}</Text>
+                <Text style={[type.caption, styles.recentLabel, {color: colors.textMuted}]}>{copy.clipboardJust}</Text>
                 <HistoryRow place={clip} here={here} onChoose={onChoose} />
               </>
             ) : null}
             {recents.length > 0 ? (
-              <Text style={[type.caption, styles.recentLabel, {color: colors.textSecondary}]}>{copy.recentSearches}</Text>
+              <Text style={[type.caption, styles.recentLabel, {color: colors.textMuted}]}>{copy.recentSearches}</Text>
             ) : null}
             {recents.map(item => (
               <HistoryRow
@@ -476,17 +493,17 @@ function HistoryRow({
   return (
     <Pressable accessibilityRole="button" onPressIn={() => onChoose(place)} style={styles.hit}>
       <View style={styles.hitCopy}>
-        <Text numberOfLines={1} style={[type.bodyStrong, {color: colors.textPrimary}]}>
+        <Text numberOfLines={1} style={[type.bodyStrong, styles.hitName, {color: colors.textPrimary}]}>
           {place.name}
         </Text>
         {place.detail ? (
-          <Text numberOfLines={1} style={[type.caption, {color: colors.textSecondary}]}>
+          <Text numberOfLines={1} style={[type.caption, {color: colors.textMuted}]}>
             {place.detail}
           </Text>
         ) : null}
       </View>
       {away != null ? (
-        <Text style={[type.caption, styles.away, {color: colors.textSecondary}]}>{formatDistance(away)}</Text>
+        <Text style={[type.caption, styles.away, {color: colors.textMuted}]}>{formatDistance(away)}</Text>
       ) : null}
     </Pressable>
   );
@@ -643,7 +660,7 @@ const styles = StyleSheet.create({
   },
   goShaft: {width: 4, height: 8, borderRadius: 1, marginTop: -1},
   modal: {flex: 1, justifyContent: 'flex-end'},
-  backdrop: {...StyleSheet.absoluteFill, backgroundColor: 'rgba(28,20,48,0.28)'},
+  backdrop: {...StyleSheet.absoluteFill, backgroundColor: 'transparent'},
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -653,9 +670,10 @@ const styles = StyleSheet.create({
   },
   sheetHandle: {alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4},
   sheetRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  sheetField: {borderWidth: 1, borderColor: '#E4E0EA'},
+  sheetField: {borderWidth: 1},
   back: {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
-  backMark: {color: '#1C1430', fontSize: 32, lineHeight: 34, marginTop: -4},
+  backMark: {fontSize: 32, lineHeight: 34, marginTop: -4},
+  hitName: {fontWeight: '700'},
   clear: {fontSize: 22, lineHeight: 24, fontWeight: '500'},
   clearHit: {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
 });

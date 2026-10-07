@@ -24,4 +24,40 @@ describe('json limit', () => {
     } as unknown as Response;
     await expect(readBoundedJson(response)).resolves.toEqual({a: 1});
   });
+
+  it('parses when Overpass omits content-length', async () => {
+    const response = {
+      headers: {get: () => null},
+      text: async () => '{"elements":[]}',
+    } as unknown as Response;
+    await expect(readBoundedJson(response)).resolves.toEqual({elements: []});
+  });
+
+  it('abandons a body that never finishes', async () => {
+    const abort = jest.fn();
+    const response = {
+      headers: {get: () => null},
+      text: () => new Promise<string>(() => {}),
+    } as unknown as Response;
+    await expect(readBoundedJson(response, MAX_JSON_CHARS, abort, 20)).rejects.toThrow('payload timeout');
+    expect(abort).toHaveBeenCalled();
+  });
+
+  it('rejects a chunked body that is over the character cap', async () => {
+    const abort = jest.fn();
+    const response = {
+      headers: {get: () => null},
+      text: async () => 'x'.repeat(MAX_JSON_CHARS + 2),
+    } as unknown as Response;
+    await expect(readBoundedJson(response, MAX_JSON_CHARS, abort)).rejects.toThrow('payload too big');
+    expect(abort).toHaveBeenCalled();
+  });
+
+  it('can skip the read timeout', async () => {
+    const response = {
+      headers: {get: () => null},
+      text: async () => '{"ok":true}',
+    } as unknown as Response;
+    await expect(readBoundedJson(response, MAX_JSON_CHARS, undefined, 0)).resolves.toEqual({ok: true});
+  });
 });

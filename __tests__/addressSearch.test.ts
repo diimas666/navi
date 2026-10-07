@@ -192,3 +192,29 @@ test('typing the start of a street does not open the city Dnipro', () => {
   expect(searchPlaces('Про').some(place => place.id === 'dnipro')).toBe(false);
   expect(searchPlaces('Дніпро').some(place => place.id === 'dnipro')).toBe(true);
 });
+
+test('a short prefix matches the street inside the name', () => {
+  expect(matchesStreet('1-й Розумовський провулок', 'Розу')).toBe(true);
+  expect(matchesStreet('2-й Розумовський провулок', 'розу')).toBe(true);
+});
+
+test('a nearby alley stays ahead of a far village with the same prefix', () => {
+  const alley: Place = {
+    id: 'alley',
+    name: '1-й Розумовський провулок',
+    latitude: 46.47,
+    longitude: 30.72,
+    kind: 'street',
+  };
+  const village: Place = {
+    id: 'village',
+    name: 'Розумівка',
+    detail: 'Запорізька область',
+    latitude: 47.73,
+    longitude: 35.19,
+    kind: 'city',
+  };
+  const found = orderPlaces([village, alley], {latitude: 46.482, longitude: 30.732}, 'Розу');
+  expect(found[0]?.id).toBe('alley');
+  expect(found.some(place => place.id === 'village')).toBe(false);
+});

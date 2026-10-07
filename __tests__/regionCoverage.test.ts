@@ -5,8 +5,10 @@ import {
   coveringRegion,
   formatRegionList,
   isCovered,
+  MAP_STALE_MS,
   missingRegionsAlong,
   regionContains,
+  regionIsStale,
   regionsAt,
 } from '../src/services/maps/regionCoverage';
 import {useMapStore} from '../src/store/mapStore';
@@ -71,6 +73,12 @@ test('Odesa city is Odesa, not the overlapping Mykolaiv box', () => {
     [30.68, 46.43],
   ]).map(region => region.id);
   expect(missing).toEqual(['odesa']);
+});
+
+test('a map older than two weeks is stale', () => {
+  expect(regionIsStale(null)).toBe(false);
+  expect(regionIsStale(Date.now() - 3 * 24 * 60 * 60 * 1000)).toBe(false);
+  expect(regionIsStale(Date.now() - MAP_STALE_MS)).toBe(true);
 });
 
 test('a downloaded Odesa map does not ask for Mykolaiv on a city trip', () => {

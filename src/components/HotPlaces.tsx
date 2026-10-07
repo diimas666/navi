@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
+import {memo, useEffect, useRef, useState} from 'react';
 import {
   Keyboard,
   Modal,
@@ -72,7 +72,7 @@ type Editor =
   | {mode: 'create'}
   | {mode: 'edit'; place: ExtraPlace};
 
-export function HotPlaces() {
+export const HotPlaces = memo(function HotPlaces() {
   const {colors} = useTheme();
   const language = resolveLanguage(useSettingsStore(state => state.language));
   const text = copy[language];
@@ -184,7 +184,7 @@ export function HotPlaces() {
       <AddressSheet editor={editing} onClose={() => setEditing(null)} />
     </>
   );
-}
+});
 
 function PlaceRow({
   title,

@@ -9,7 +9,7 @@ type ThemeValue = {
   mode: 'dark' | 'light';
 };
 
-function resolveMode(preference: 'light' | 'dark' | 'system', scheme: string | null | undefined): 'dark' | 'light' {
+export function resolveMode(preference: 'light' | 'dark' | 'system', scheme: string | null | undefined): 'dark' | 'light' {
   if (preference === 'dark') {
     return 'dark';
   }
