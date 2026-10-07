@@ -601,7 +601,7 @@ export function MapScreen({navigation}: Props) {
           setZoomToken(token => token + 1);
         }}
       />
-      {driving ? <TripReadout speedMps={speedMps} limitKmh={limitKmh} night={nightMap} cameraM={cameraM} /> : null}
+      {driving ? <TripReadout limitKmh={limitKmh} night={nightMap} cameraM={cameraM} /> : null}
       {!driving && route && missingMaps.length > 0 ? (
         <View style={styles.needBanner}>
           <Text style={styles.needTitle}>{copy.mapsNeed}</Text>

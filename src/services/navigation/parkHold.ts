@@ -24,6 +24,7 @@ export type ParkInput = {
   speedMps: number;
   speedSource: string;
   engineRunning: boolean | null;
+  movedM?: number;
 };
 
 export type ParkAction = 'follow' | 'anchor' | 'lock' | 'unlock' | 'hold';
@@ -41,7 +42,8 @@ export function decidePark(input: ParkInput, memory: ParkMemory): ParkDecision {
     input.speedMps >= CRAWL_MPS &&
     (input.speedSource === 'obd' || input.speedSource === 'inertial');
   const gpsMove = input.hasSpeed && input.speedMps >= GPS_ROLL_MPS && input.speedSource === 'gps' && input.autoUnlockGps;
-  const rolling = sensorMove || gpsMove;
+  const gpsShift = (input.movedM ?? 0) >= 15;
+  const rolling = sensorMove || gpsMove || gpsShift;
   const since = rolling ? 0 : memory.stillSince || input.now;
 
   if (input.manualLock) {

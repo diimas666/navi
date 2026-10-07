@@ -54,7 +54,7 @@ export async function googleSuggest(query: string, language: 'uk' | 'ru', bias: 
   if (bias) {
     const spot = `${bias.latitude.toFixed(5)},${bias.longitude.toFixed(5)}`;
     params.set('location', spot);
-    params.set('radius', '50000');
+    params.set('radius', '80000');
     params.set('origin', spot);
   }
   const response = await fetch(`${BASE}/autocomplete/json?${params.toString()}`, {headers: HEADERS});

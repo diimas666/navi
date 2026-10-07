@@ -56,7 +56,7 @@ test('after unlock the drifted marker rejoins and then stays on the fix', () => 
     const before = haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude);
     shown = step(shown, fix, 1, 12, true);
     const moved = before - haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude);
-    expect(moved).toBeLessThanOrEqual(16.5);
+    expect(moved).toBeLessThanOrEqual(50);
   }
   expect(haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude)).toBeLessThan(4);
   shown = step(shown, fix, 1, 12, true);
@@ -94,4 +94,10 @@ test('parking-scale noise does not move the marker', () => {
   const fix = ahead(0.2);
   const shown = step(home, fix, 1, 0, true);
   expect(haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude)).toBeLessThan(0.5);
+});
+
+test('GPS coordinates moving at car speed follow even when the phone reports 9 km/h', () => {
+  const fix = ahead(22);
+  const shown = step(home, fix, 1, 2.5, true);
+  expect(haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude)).toBeLessThan(1);
 });

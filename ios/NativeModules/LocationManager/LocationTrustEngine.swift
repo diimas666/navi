@@ -19,13 +19,11 @@ import Foundation
 
   private let lock = NSLock()
   private var previous: Sample?
-  private var previousImpliedSpeed: Double?
   private let earthRadius = 6_378_137.0
 
   @objc public func reset() {
     lock.lock()
     previous = nil
-    previousImpliedSpeed = nil
     lock.unlock()
   }
 
@@ -56,7 +54,6 @@ import Foundation
 
     lock.lock()
     let prior = previous
-    let priorSpeed = previousImpliedSpeed
     previous = sample
     lock.unlock()
 
@@ -69,29 +66,14 @@ import Foundation
       if dt > 0, dt < 8 {
         let distance = haversine(prior.latitude, prior.longitude, sample.latitude, sample.longitude)
         let implied = distance / dt
-        lock.lock()
-        previousImpliedSpeed = implied
-        lock.unlock()
 
+        // iPhone speed in a car is often 5–10 km/h while the coordinates already moved at 80.
+        // Position is the truth. A bogus speed must not freeze the marker.
         if implied > 85 {
           return result("untrusted", "impossible_speed")
         }
         if dt < 2, distance > 200, implied > 40 {
           return result("untrusted", "position_jump")
-        }
-        if sample.hasSpeed, abs(sample.speed - implied) > 18, implied > 4 {
-          return result("untrusted", "speed_mismatch")
-        }
-        if let priorSpeed, dt < 3, abs(implied - priorSpeed) / dt > 12, implied > 5 {
-          return result("untrusted", "impossible_acceleration")
-        }
-        if sample.hasHeading, prior.hasHeading, sample.hasSpeed, sample.speed > 12, dt < 1.5 {
-          if angleDelta(prior.heading, sample.heading) > 110 {
-            return result("untrusted", "heading_mismatch")
-          }
-        }
-        if sample.accuracy > 35 || (sample.hasSpeed && abs(sample.speed - implied) > 8 && implied > 3) {
-          return result("degraded", "degraded_accuracy")
         }
       }
     }
@@ -113,10 +95,5 @@ import Foundation
     let dLon = (lon2 - lon1) * .pi / 180
     let a = sin(dLat / 2) * sin(dLat / 2) + cos(p1) * cos(p2) * sin(dLon / 2) * sin(dLon / 2)
     return 2 * earthRadius * atan2(sqrt(a), sqrt(1 - a))
-  }
-
-  private func angleDelta(_ a: Double, _ b: Double) -> Double {
-    let diff = abs(a - b).truncatingRemainder(dividingBy: 360)
-    return diff > 180 ? 360 - diff : diff
   }
 }

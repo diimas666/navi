@@ -754,7 +754,7 @@ export function NaviMap({
             </View>
           </Marker>
         ) : null}
-        {pinned || !located ? null : (
+        {!located || (pinned && googleLive) ? null : (
           <Marker id="vehicle" lngLat={[longitude, latitude]} anchor="center">
             <VehicleMarker navigating={tracking} rotation={tracking && headingUp ? 0 : heading} />
           </Marker>

@@ -1,7 +1,6 @@
 import {resolveLanguage} from '../../i18n/settingsCopy';
 import {uiCopy} from '../../i18n/uiCopy';
 import type {Place} from '../../models/domain';
-import {useMapStore} from '../../store/mapStore';
 import {useSessionStore} from '../../store/sessionStore';
 import {useSettingsStore} from '../../store/settingsStore';
 import {haversineMeters} from '../../utils/geo';
@@ -134,8 +133,7 @@ export function suggestPlacesNow(query: string): Place[] {
 
 /** True when the phone is not known to be offline, so Google can answer. */
 export function googleSearchOn(): boolean {
-  const link = useMapStore.getState();
-  return googleSearchReady() && !(link.linkKnown && !link.online);
+  return googleSearchReady();
 }
 
 export async function suggestPlaces(query: string): Promise<Place[]> {
@@ -215,7 +213,20 @@ export async function searchPlacesOnline(query: string): Promise<Place[]> {
     // The street lookup can fail. One house lookup still runs.
   }
   if (!wanted) {
-    return [];
+    try {
+      const mixed = await photonSearch(streetQuery(query), bias);
+      const useful = mixed.filter(place => place.kind === 'poi' || place.kind === 'city' || place.kind === 'street');
+      if (useful.length > 0) {
+        return useful;
+      }
+    } catch {
+      // Photon can miss a mall. Nominatim still has a name search.
+    }
+    try {
+      return await nominatimSearch(query, bias);
+    } catch {
+      return [];
+    }
   }
   try {
     const houses = await photonSearch(streetQuery(query), bias);
@@ -364,6 +375,73 @@ async function photonSearch(query: string, bias: Bias | null, layer?: 'street' |
         latitude,
         longitude,
         kind: 'poi',
+      },
+    ];
+  });
+}
+
+async function nominatimSearch(query: string, bias: Bias | null): Promise<Place[]> {
+  const params = new URLSearchParams({
+    format: 'jsonv2',
+    q: query,
+    countrycodes: 'ua',
+    limit: '8',
+    addressdetails: '1',
+  });
+  if (bias) {
+    const west = bias.longitude - 0.45;
+    const east = bias.longitude + 0.45;
+    const south = bias.latitude - 0.35;
+    const north = bias.latitude + 0.35;
+    params.set('viewbox', `${west},${north},${east},${south}`);
+    params.set('bounded', '0');
+  }
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+    headers: {Accept: 'application/json', 'User-Agent': 'Navi/1.0 (offline navigator for Ukraine)'},
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const payload: unknown = await response.json();
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+  return payload.flatMap(item => {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const record = item as {
+      lat?: string;
+      lon?: string;
+      osm_id?: number;
+      class?: string;
+      type?: string;
+      name?: string;
+      display_name?: string;
+      address?: {city?: string; town?: string; village?: string; road?: string};
+    };
+    const latitude = Number(record.lat);
+    const longitude = Number(record.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !insideUkraine(latitude, longitude)) {
+      return [];
+    }
+    const title = record.name || record.display_name?.split(',')[0] || '';
+    if (title.length < 2) {
+      return [];
+    }
+    const city = record.address?.city || record.address?.town || record.address?.village;
+    const road = record.class === 'highway';
+    return [
+      {
+        id: `nom-${record.osm_id ?? title}`,
+        name: title,
+        detail: [record.address?.road && record.address.road !== title ? record.address.road : null, city]
+          .filter(part => part && part.length > 0)
+          .join(', '),
+        latitude,
+        longitude,
+        kind: road ? 'street' : 'poi',
       },
     ];
   });

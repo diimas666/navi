@@ -80,8 +80,6 @@ import Foundation
         course: gpsHeading,
         hasMotionHeading: hasHeading,
         motionHeading: motionHeading,
-        hasVehicle: hasVehicleSpeed,
-        vehicleSpeed: vehicleSpeed,
         dt: dt,
         paused: paused
       )
@@ -152,8 +150,6 @@ import Foundation
     course: Double,
     hasMotionHeading: Bool,
     motionHeading: Double,
-    hasVehicle: Bool,
-    vehicleSpeed: Double,
     dt: Double,
     paused: Bool
   ) {
@@ -175,24 +171,15 @@ import Foundation
       return
     }
 
-    let wasAway = source == "dr" || source == "blended" || source == "held"
     let gap = haversine(latitude, longitude, lat, lon)
-    let step = min(max(dt, 0.05), 2)
-    let live = (hasSpeed ? max(0, speed) : 0) * step + 4
-    let near = gap <= 28
-    let standing = (hasVehicle && vehicleSpeed < 0.35) || (!hasVehicle && hasSpeed && speed < 0.35)
-    if standing {
-      source = "gps"
-    } else if !wasAway && !paused && gap <= live {
-      let budget = max(hasSpeed ? speed : 0, 8) * max(dt, 0.2) + 8
-      moveToward(lat, lon, budget)
-      source = "gps"
-    } else if paused && near {
+    let implied = dt > 0.05 ? gap / dt : gap / 0.05
+    let carLike = gap <= 50 && implied <= 28
+    if paused || carLike {
       latitude = lat
       longitude = lon
       source = "gps"
     } else {
-      let catchup = max(8, min(16, (hasSpeed ? speed : 0) + 6))
+      let catchup = min(40, max(16, implied))
       let budget = catchup * min(max(dt, 0.05), 1)
       moveToward(lat, lon, budget)
       let left = haversine(latitude, longitude, lat, lon)

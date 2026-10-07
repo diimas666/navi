@@ -22,6 +22,11 @@ export function settleMarker(input: MarkerSettleInput): {latitude: number; longi
     return {latitude: input.latitude, longitude: input.longitude};
   }
   const gap = Math.max(0, input.gapS);
+  const implied = gap > 0.05 ? distance / gap : distance / 0.05;
+  // Phone GPS speed is often ~9 km/h in a moving car. A normal 1s hop is ~20 m, not 150 m.
+  if (gap <= 2.5 && distance <= 50 && implied <= 28) {
+    return {latitude: input.latitude, longitude: input.longitude};
+  }
   const step = Math.min(Math.max(gap, 0.05), 2);
   const live = Math.max(0, input.speedMps) * step + 4;
   if (input.trustFix && gap <= 2.5 && distance <= live) {

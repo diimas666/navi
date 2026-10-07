@@ -14,10 +14,10 @@ test('distance to a straight route is the perpendicular gap', () => {
   expect(away).toBeLessThan(150);
 });
 
-test('reroute waits for speed, distance and a pause', () => {
+test('reroute after leaving the line does not wait for a fake phone speed', () => {
   expect(shouldRebuild(80, 8, 21_000)).toBe(true);
   expect(shouldRebuild(20, 8, 21_000)).toBe(false);
-  expect(shouldRebuild(80, 0.4, 21_000)).toBe(false);
+  expect(shouldRebuild(80, 0, 21_000)).toBe(true);
   expect(shouldRebuild(80, 8, 1000)).toBe(false);
 });
 

@@ -401,6 +401,10 @@ function holdOrFollow(
       speedMps: snapshot.speedMps,
       speedSource: snapshot.speedSource,
       engineRunning,
+      movedM:
+        session.displayLatitude != null && session.displayLongitude != null
+          ? haversineMeters(session.displayLatitude, session.displayLongitude, latitude, longitude)
+          : 0,
     },
     parkMemory,
   );

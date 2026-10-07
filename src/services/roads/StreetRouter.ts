@@ -1,10 +1,11 @@
 import type {LaneHint, RoutePlan} from '../../models/domain';
-import {AppError} from '../errors/AppError';
-import {tripText} from '../../i18n/tripCopy';
 import {uiCopy} from '../../i18n/uiCopy';
 import {geometryStartsNear} from '../navigation/placeFix';
+import {googleDrivingReady, googleDrivingRoutes} from './GoogleRouter';
 import {useSettingsStore} from '../../store/settingsStore';
 import {bearingDegrees, haversineMeters} from '../../utils/geo';
+
+const OSRM_HOSTS = ['https://router.project-osrm.org', 'https://routing.openstreetmap.de/routed-car'];
 
 type RawStep = {
   distance?: number;
@@ -39,13 +40,36 @@ export async function streetRoutes(
     ...stops.map(stop => [stop.longitude, stop.latitude]),
     [destinationLon, destinationLat],
   ];
+  if (googleDrivingReady()) {
+    try {
+      const google = await googleDrivingRoutes(originLat, originLon, destinationLat, destinationLon, stops);
+      if (google.length > 0) {
+        return google.sort((left, right) => routeRank(left, heading) - routeRank(right, heading));
+      }
+    } catch {
+      // Google Directions can be restricted. OSRM still answers.
+    }
+  }
+  const ranked = await osrmRoutes(points, heading, stops.length > 0);
+  if (ranked.length === 0 && heading != null) {
+    return osrmRoutes(points, null, stops.length > 0);
+  }
+  return ranked;
+}
+
+async function osrmRoutes(
+  points: number[][],
+  heading?: number | null,
+  hasStops = false,
+): Promise<RoutePlan[]> {
   const path = points.map(([lon, lat]) => `${lon},${lat}`).join(';');
   const params = new URLSearchParams({
     overview: 'full',
     geometries: 'geojson',
     steps: 'true',
-    alternatives: stops.length > 0 ? 'false' : '3',
+    alternatives: hasStops ? 'false' : '3',
     approaches: points.map(() => 'unrestricted').join(';'),
+    radiuses: points.map(() => '120').join(';'),
     continue_straight: 'false',
   });
   if (heading != null && Number.isFinite(heading)) {
@@ -53,56 +77,65 @@ export async function streetRoutes(
     const rest = points.slice(1).map(() => '');
     params.set('bearings', [`${face},80`, ...rest].join(';'));
   }
-  const url = `https://router.project-osrm.org/route/v1/driving/${path}?${params.toString()}`;
-  const response = await fetch(url, {
-    headers: {Accept: 'application/json', 'User-Agent': 'Navi/1.0 (offline navigator for Ukraine)'},
-    signal: AbortSignal.timeout(4000),
-  });
-  if (!response.ok) {
-    throw new AppError('MAP_ERROR', `OSRM ${response.status}`, tripText().noRoute);
-  }
-  const payload: unknown = await response.json();
-  if (!payload || typeof payload !== 'object') {
-    return [];
-  }
-  const record = payload as {
-    code?: string;
-    routes?: Array<{
-      distance?: number;
-      duration?: number;
-      geometry?: {coordinates?: Array<[number, number]>};
-      legs?: Array<{
-        steps?: RawStep[];
-      }>;
-    }>;
-  };
-  if (record.code !== 'Ok' || !record.routes) {
-    if (heading != null) {
-      return streetRoutes(originLat, originLon, destinationLat, destinationLon, null, stops);
-    }
-    return [];
-  }
-  const ranked = record.routes
-    .map(route => {
-      const coordinates = route.geometry?.coordinates;
-      if (!coordinates || coordinates.length < 2 || !geometryStartsNear(coordinates, originLat, originLon)) {
-        return null;
+  for (const host of OSRM_HOSTS) {
+    try {
+      const response = await fetch(`${host}/route/v1/driving/${path}?${params.toString()}`, {
+        headers: {Accept: 'application/json', 'User-Agent': 'Navi/1.0 (offline navigator for Ukraine)'},
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) {
+        continue;
       }
-      const distanceM = route.distance ?? 0;
-      const plan: RoutePlan = {
-        distanceM,
-        durationS: route.duration ?? 0,
-        steps: readSteps(route.legs?.flatMap(leg => leg.steps ?? []), distanceM),
-        coordinates,
+      const payload: unknown = await response.json();
+      if (!payload || typeof payload !== 'object') {
+        continue;
+      }
+      const record = payload as {
+        code?: string;
+        routes?: Array<{
+          distance?: number;
+          duration?: number;
+          geometry?: {coordinates?: Array<[number, number]>};
+          legs?: Array<{
+            steps?: RawStep[];
+          }>;
+        }>;
       };
-      return plan;
-    })
-    .filter((route): route is RoutePlan => route != null)
-    .sort((left, right) => routeRank(left, heading) - routeRank(right, heading));
-  if (ranked.length === 0 && heading != null) {
-    return streetRoutes(originLat, originLon, destinationLat, destinationLon, null, stops);
+      if (record.code !== 'Ok' || !record.routes) {
+        continue;
+      }
+      const ranked = record.routes
+        .map(route => {
+          const coordinates = route.geometry?.coordinates;
+          const origin = points[0];
+          if (
+            !coordinates ||
+            coordinates.length < 2 ||
+            !origin ||
+            !geometryStartsNear(coordinates, origin[1], origin[0], 80_000)
+          ) {
+            return null;
+          }
+          const distanceM = route.distance ?? 0;
+          const plan: RoutePlan = {
+            distanceM,
+            durationS: route.duration ?? 0,
+            steps: readSteps(route.legs?.flatMap(leg => leg.steps ?? []), distanceM),
+            coordinates,
+            via: 'street',
+          };
+          return plan;
+        })
+        .filter((route): route is RoutePlan => route != null)
+        .sort((left, right) => routeRank(left, heading) - routeRank(right, heading));
+      if (ranked.length > 0) {
+        return ranked;
+      }
+    } catch {
+      // The next public router still has a chance.
+    }
   }
-  return ranked;
+  return [];
 }
 
 function routeRank(route: RoutePlan, heading?: number | null): number {

@@ -98,7 +98,7 @@ async function hereNow(): Promise<{latitude: number; longitude: number} | null> 
   if (Math.abs(fix.latitude) < 0.2 && Math.abs(fix.longitude) < 0.2) {
     return null;
   }
-  if (fix.horizontalAccuracy < 0 || fix.horizontalAccuracy > 120) {
+  if (fix.horizontalAccuracy < 0 || fix.horizontalAccuracy > 250) {
     return null;
   }
   const age = Date.now() - fix.timestamp;
@@ -139,9 +139,13 @@ async function collectRoutes(
   const offline = planThroughStops(routingGraph(), originLat, originLon, destinationLat, destinationLon, stops)
     .map(route => finish(route, 'graph'))
     .filter(route => startsNear(route, originLat, originLon));
-  let pool = [...street, ...offline]
-    .filter(route => !isAirLine(route))
-    .sort((left, right) => left.distanceM - right.distanceM);
+  const streetOk = street.filter(route => !isAirLine(route)).sort((left, right) => left.distanceM - right.distanceM);
+  if (streetOk.length > 0 && !(stops.length === 0 && straight < 900 && isLongLoop(streetOk[0], straight))) {
+    return keepDistinctRoutes(streetOk.filter(route => route.distanceM <= Math.max(streetOk[0].distanceM * 1.28, streetOk[0].distanceM + 80)));
+  }
+  let pool = [...streetOk, ...offline.filter(route => !isAirLine(route))].sort(
+    (left, right) => left.distanceM - right.distanceM,
+  );
   if (stops.length === 0 && straight < 900 && isLongLoop(pool[0], straight)) {
     const curb = nearerCurb(destinationLat, destinationLon, originLat, originLon);
     if (curb) {
@@ -166,8 +170,12 @@ async function collectRoutes(
     }
   }
   if (pool.length > 0) {
-    const shortest = pool[0];
-    const kept = pool.filter(route => route.distanceM <= Math.max(shortest.distanceM * 1.28, shortest.distanceM + 80));
+    const streets = pool
+      .filter(route => route.via === 'street')
+      .sort((left, right) => left.distanceM - right.distanceM);
+    const source = streets.length > 0 ? streets : pool;
+    const shortest = source[0];
+    const kept = source.filter(route => route.distanceM <= Math.max(shortest.distanceM * 1.28, shortest.distanceM + 80));
     return keepDistinctRoutes(kept);
   }
   const approach = directApproach(from.latitude, from.longitude, destinationLat, destinationLon);

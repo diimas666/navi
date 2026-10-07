@@ -70,3 +70,13 @@ test('without rpm a long stop outside a trip parks, and GPS creep does not', () 
   const creep = decidePark(stopped({locked: true, speedSource: 'gps', speedMps: 0.5, engineRunning: null}), parked.memory);
   expect(creep.action).toBe('hold');
 });
+
+test('GPS coordinates that jumped 40 m unlock the parked marker', () => {
+  const held = decidePark(stopped({navigationActive: true, speedMps: 0, speedSource: 'gps'}), memory);
+  expect(held.action).toBe('anchor');
+  const moved = decidePark(
+    stopped({navigationActive: true, speedMps: 0, speedSource: 'gps', movedM: 40}),
+    held.memory,
+  );
+  expect(moved.action).toBe('follow');
+});
