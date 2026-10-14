@@ -1,55 +1,46 @@
 import {StyleSheet, Text, View} from 'react-native';
 
 import type {LaneHint} from '../models/domain';
+import {formatDriveMeters} from '../services/navigation/instruction';
 import type {ManeuverCue, ManeuverTurn} from '../services/navigation/maneuver';
 
 type Props = {
   current: ManeuverCue;
   after?: ManeuverCue | null;
   thenWord: string;
-  street?: string;
   night?: boolean;
 };
 
-export function ManeuverBanner({current, after, thenWord, street, night = false}: Props) {
-  const road = street && street !== current.street ? street : '';
+export function ManeuverBanner({current, after, thenWord, night = false}: Props) {
   const ink = night ? '#F4F0FF' : '#1C1430';
   const muted = night ? '#B8B0C8' : '#6E657F';
+  const next = after && after.turn !== 'arrive' ? after : null;
   return (
     <View style={[styles.card, night ? styles.cardNight : null]}>
       {current.lanes.length > 1 ? <LaneRow lanes={current.lanes} night={night} /> : null}
       <View style={styles.row}>
         <TurnArrow turn={current.turn} large night={night} />
-        <Text style={[styles.meters, {color: ink}]}>{formatMeters(current.meters)}</Text>
+        <Text style={[styles.meters, {color: ink}]}>{formatDriveMeters(current.meters)}</Text>
         <View style={styles.copy}>
-          <Text style={[styles.title, {color: ink}]} numberOfLines={1}>
-            {current.title}
-          </Text>
-          {road ? (
-            <Text style={[styles.street, {color: muted}]} numberOfLines={1}>
-              {road}
-            </Text>
+          <Text style={[styles.title, {color: ink}]}>{current.title}</Text>
+          {current.street ? (
+            <Text style={[styles.street, {color: muted}]}>{current.street}</Text>
           ) : null}
         </View>
       </View>
-      {after && after.turn !== 'arrive' ? (
+      {next ? (
         <View style={styles.after}>
-          <TurnArrow turn={after.turn} night={night} />
-          <Text style={[styles.afterText, {color: muted}]} numberOfLines={1}>
-            {`${thenWord} ${after.title}`}
-          </Text>
+          <TurnArrow turn={next.turn} night={night} />
+          <View style={styles.copy}>
+            <Text style={[styles.afterText, {color: muted}]}>
+              {`${thenWord} ${next.title}`.trim()}
+            </Text>
+            {next.street ? <Text style={[styles.afterStreet, {color: muted}]}>{next.street}</Text> : null}
+          </View>
         </View>
       ) : null}
     </View>
   );
-}
-
-function formatMeters(meters: number): string {
-  if (meters >= 950) {
-    return `${(meters / 1000).toFixed(1).replace('.', ',')} км`;
-  }
-  const rounded = meters > 40 ? Math.round(meters / 10) * 10 : Math.max(0, Math.round(meters));
-  return `${rounded} м`;
 }
 
 function arrowRotation(turn: ManeuverTurn): string {
@@ -103,6 +94,7 @@ const styles = StyleSheet.create({
     top: 54,
     left: 12,
     right: 88,
+    zIndex: 4,
     borderRadius: 22,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
@@ -114,13 +106,14 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 4},
   },
   cardNight: {backgroundColor: '#1C1826', shadowOpacity: 0.28},
-  row: {flexDirection: 'row', alignItems: 'center', gap: 10},
-  copy: {flex: 1, gap: 1},
-  meters: {color: '#1C1430', fontSize: 26, fontWeight: '800'},
-  title: {color: '#1C1430', fontSize: 16, fontWeight: '700'},
-  street: {color: '#6E657F', fontSize: 13, fontWeight: '600'},
-  after: {flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4},
-  afterText: {flex: 1, color: '#6E657F', fontSize: 13, fontWeight: '600'},
+  row: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
+  copy: {flex: 1, gap: 2, minWidth: 0},
+  meters: {color: '#1C1430', fontSize: 22, fontWeight: '800', paddingTop: 1},
+  title: {color: '#1C1430', fontSize: 17, fontWeight: '800'},
+  street: {color: '#6E657F', fontSize: 15, fontWeight: '700'},
+  after: {flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingLeft: 4},
+  afterText: {color: '#6E657F', fontSize: 13, fontWeight: '600'},
+  afterStreet: {color: '#6E657F', fontSize: 13, fontWeight: '700'},
   lanes: {flexDirection: 'row', gap: 4},
   lane: {
     width: 28,
@@ -135,8 +128,8 @@ const styles = StyleSheet.create({
   laneNight: {backgroundColor: '#2A2438'},
   laneOn: {borderColor: '#149C96', backgroundColor: '#E7F7F5'},
   laneOnNight: {borderColor: '#5EE0D6', backgroundColor: '#24343A'},
-  arrowBox: {width: 16, height: 16, alignItems: 'center'},
-  arrowBoxLarge: {width: 22, height: 22},
+  arrowBox: {width: 16, height: 16, alignItems: 'center', marginTop: 3},
+  arrowBoxLarge: {width: 22, height: 22, marginTop: 2},
   arrowHead: {
     width: 0,
     height: 0,
@@ -150,6 +143,6 @@ const styles = StyleSheet.create({
   arrowHeadLarge: {borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 9},
   arrowShaft: {width: 3, height: 6, borderRadius: 1, backgroundColor: '#149C96', marginTop: -1},
   arrowShaftLarge: {width: 4, height: 8},
-  arrive: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#149C96'},
-  arriveLarge: {width: 14, height: 14, borderRadius: 7},
+  arrive: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#149C96', marginTop: 6},
+  arriveLarge: {width: 14, height: 14, borderRadius: 7, marginTop: 6},
 });

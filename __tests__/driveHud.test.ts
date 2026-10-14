@@ -111,8 +111,10 @@ test('the second turn is kept behind the first', () => {
     ],
   };
   const pair = nextCues(route, 46.48, 30.72, 'uk');
-  expect(pair.current.title.toLowerCase()).toContain('торгова');
-  expect(pair.after?.title.toLowerCase()).toContain('дерибасівська');
+  expect(pair.current.title.toLowerCase()).toContain('праворуч');
+  expect(pair.current.street.toLowerCase()).toContain('торгова');
+  expect(pair.after?.title.toLowerCase()).toContain('ліворуч');
+  expect(pair.after?.street.toLowerCase()).toContain('дерибасівська');
 });
 
 test('a roundabout keeps the exit number', () => {

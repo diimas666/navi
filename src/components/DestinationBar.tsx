@@ -41,6 +41,7 @@ type Props = {
   target: Place | null;
   onPickToggle: () => void;
   onTarget: (place: Place) => void;
+  onClearTarget?: () => void;
   onGo: () => void;
   onStop: () => void;
   onFocus: () => void;
@@ -53,6 +54,7 @@ export const DestinationBar = memo(function DestinationBar({
   target,
   onPickToggle,
   onTarget,
+  onClearTarget,
   onGo,
   onStop,
   onFocus,
@@ -199,6 +201,7 @@ export const DestinationBar = memo(function DestinationBar({
         setResults(houses);
         setEmpty(false);
         setClip(null);
+        onClearTarget?.();
         return;
       }
     }

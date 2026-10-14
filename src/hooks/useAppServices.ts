@@ -253,12 +253,14 @@ export function useAppServices(): void {
         }
         rememberPoint(snapshot, shown.latitude, shown.longitude);
         rememberCalibration(snapshot);
-        if (snapshot.hasGps && (farFromLine || routeStartsAway)) {
-          recoverFarRoute(shown.latitude, shown.longitude);
-        } else {
-          rebuildIfOffRoute(shown.latitude, shown.longitude, snapshot.speedMps, snapshot.navigationActive).catch(
-            () => undefined,
-          );
+        if (snapshot.hasGps && snapshot.trust === 'trusted') {
+          if (farFromLine || routeStartsAway) {
+            recoverFarRoute(shown.latitude, shown.longitude);
+          } else {
+            rebuildIfOffRoute(shown.latitude, shown.longitude, snapshot.speedMps, snapshot.navigationActive).catch(
+              () => undefined,
+            );
+          }
         }
       } else if (rawFix && useSessionStore.getState().displayLatitude == null) {
         const stoodRaw = placeFix(snapshot.gpsLatitude, snapshot.gpsLongitude);

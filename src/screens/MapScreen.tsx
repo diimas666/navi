@@ -19,7 +19,7 @@ import type {Place, RoutePlan, TrustLevel} from '../models/domain';
 import NativeTripSession from '../native/NativeTripSession';
 import {confirmTrip, startTripTo} from '../services/navigation/startTrip';
 import {saveSettings, selectPersisted} from '../services/settings/SettingsRepository';
-import {nextCues, progressAlong} from '../services/navigation/maneuver';
+import {lineOffsetM, nextCues, progressAlong} from '../services/navigation/maneuver';
 import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue';
 import {speedLimitKmh} from '../services/navigation/speedLimit';
 import {isNightAt} from '../services/maps/sun';
@@ -101,8 +101,7 @@ export function MapScreen({navigation}: Props) {
   const located = latitude != null && longitude != null;
   const centerLat = latitude ?? 0;
   const centerLon = longitude ?? 0;
-  const farFromRoads = snapshot?.hasEstimate === true && crossTrackM != null && crossTrackM > 80;
-  const eta = farFromRoads ? offRoadEta(crossTrackM, snapshot?.speedMps ?? 0, snapshot?.hasSpeed === true) : null;
+  const offGraph = snapshot?.hasEstimate === true && crossTrackM != null && crossTrackM > 80;
   const shownLat = centerLat;
   const shownLon = centerLon;
   const shownHeading = snapshot?.heading ?? 0;
@@ -112,6 +111,7 @@ export function MapScreen({navigation}: Props) {
   const offlineOnce = useRef(false);
   const arriveHold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFix = useRef<{lat: number; lon: number} | null>(null);
+  const departedAt = useRef(0);
   if (located && follow && !keepManualZoom && !touching.current) {
     zoomRef.current = zoomFor(baseZoom, liveSpeed);
   }
@@ -124,18 +124,12 @@ export function MapScreen({navigation}: Props) {
   }, [route]);
 
   useEffect(() => {
-    if (!mapCoach && coachSeen) {
+    if (!mapCoach) {
       return;
     }
     setCoachVisible(true);
     setCoachStep(0);
-    if (coachSeen) {
-      return;
-    }
-    const store = useSettingsStore.getState();
-    store.setCoachSeen(true);
-    saveSettings(selectPersisted(useSettingsStore.getState())).catch(() => undefined);
-  }, [mapCoach, coachSeen]);
+  }, [mapCoach]);
 
   useEffect(() => {
     if (latitude == null || longitude == null) {
@@ -202,6 +196,7 @@ export function MapScreen({navigation}: Props) {
     }
     setDriving(false);
     setBuildings3d(false);
+    useSessionStore.getState().setDriving(false);
   }, [routeKey]);
 
   const previewRoute = useCallback((place: Place) => {
@@ -283,7 +278,9 @@ export function MapScreen({navigation}: Props) {
     zoomRef.current = zoomFor(useSettingsStore.getState().baseZoom, useSessionStore.getState().snapshot?.speedMps ?? 0);
     setZoomToken(token => token + 1);
     movedAt.current = Date.now();
+    departedAt.current = Date.now();
     useSessionStore.getState().setFollow(true);
+    useSessionStore.getState().unlockPosition();
     setDriving(true);
     useSessionStore.getState().setDriving(true);
     useSessionStore.getState().bumpHud();
@@ -434,7 +431,11 @@ export function MapScreen({navigation}: Props) {
   const remainingS = route && route.distanceM > 0 ? route.durationS * (remainingM / route.distanceM) : 0;
   const pair = driving && route && located ? nextCues(route, shownLat, shownLon, resolveLanguage(language)) : null;
   const cue = pair?.current ?? null;
-  const spoken = cue ? `${cue.title}:${Math.round(cue.meters / 20)}` : '';
+  const spoken = cue ? `${cue.title}:${cue.street}:${Math.round(cue.meters / 20)}` : '';
+  const routeOffsetM = route && located ? lineOffsetM(route.coordinates, shownLat, shownLon) : null;
+  const rawFarFromRoads = offGraph && (routeOffsetM == null || routeOffsetM > 80);
+  const farFromRoads = useStableOn(rawFarFromRoads, 2500);
+  const eta = farFromRoads ? offRoadEta(crossTrackM, snapshot?.speedMps ?? 0, snapshot?.hasSpeed === true) : null;
   const limitKmh = driving && located ? speedLimitKmh(shownLat, shownLon, route) : null;
   const cameraM = driving && located ? cameraAheadMeters(shownLat, shownLon, shownHeading) : null;
   const regions = useMapStore(state => state.regions);
@@ -442,8 +443,10 @@ export function MapScreen({navigation}: Props) {
     () => (route ? missingRegionsAlong(route.coordinates) : []),
     [route, regions],
   );
-  const edgeGap =
-    driving && located && route ? coverageGapAhead(shownLat, shownLon, route.coordinates) : null;
+  const edgeGap = useStableOn(
+    Boolean(driving && located && route && coverageGapAhead(shownLat, shownLon, route.coordinates)),
+    3500,
+  );
   const nightLive = driving && located && isNightAt(shownLat, shownLon);
   if (!alongOpen) {
     nightHold.current = nightLive;
@@ -459,7 +462,12 @@ export function MapScreen({navigation}: Props) {
     if (!driving || !cue || !voice) {
       return;
     }
-    speakManeuver(cue.meters, cue.title, resolveLanguage(language), cue.turn === 'arrive');
+    speakManeuver(
+      cue.meters,
+      cue.street ? `${cue.title} · ${cue.street}` : cue.title,
+      resolveLanguage(language),
+      cue.turn === 'arrive',
+    );
   }, [spoken, driving, cue, language, voice]);
 
   useEffect(() => {
@@ -481,8 +489,16 @@ export function MapScreen({navigation}: Props) {
   }, [linkKnown, online]);
 
   useEffect(() => {
-    const near = Boolean(driving && route && located && remainingM <= 48);
-    const lost = !driving || !route || !located || remainingM > 90;
+    const slow = !snapshot?.hasSpeed || snapshot.speedMps < 3.2;
+    const destLat = useSessionStore.getState().destinationLatitude;
+    const destLon = useSessionStore.getState().destinationLongitude;
+    const atDest =
+      destLat != null && destLon != null
+        ? haversineMeters(shownLat, shownLon, destLat, destLon) <= 35
+        : remainingM <= 28;
+    const timeSinceDepart = departedAt.current > 0 ? Date.now() - departedAt.current : 0;
+    const near = Boolean(driving && route && located && atDest && slow && timeSinceDepart >= 15_000);
+    const lost = !driving || !route || !located || remainingM > 80 || !slow;
     if (lost) {
       if (arriveHold.current) {
         clearTimeout(arriveHold.current);
@@ -505,8 +521,8 @@ export function MapScreen({navigation}: Props) {
       useSessionStore.getState().resetRoute();
       clearOpenNav().catch(() => undefined);
       NativeTripSession?.stopNavigation();
-    }, 900);
-  }, [driving, located, remainingM, route]);
+    }, 3200);
+  }, [driving, located, remainingM, route, snapshot?.hasSpeed, snapshot?.speedMps, shownLat, shownLon]);
 
   useEffect(() => {
     return () => {
@@ -525,15 +541,9 @@ export function MapScreen({navigation}: Props) {
           useSessionStore.getState().bumpHud();
         }
       }}>
-      {located ? null : (
-        <View style={styles.locating} pointerEvents="none">
-          <Text style={[type.body, {color: colors.textSecondary}]}>{copy.locating}</Text>
-        </View>
-      )}
-      {located ? (
       <NaviMap
-        latitude={shownLat}
-        longitude={shownLon}
+        latitude={located ? shownLat : 46.4825}
+        longitude={located ? shownLon : 30.7233}
         heading={shownHeading}
         speedMps={speedMps}
         follow={follow && located}
@@ -559,7 +569,11 @@ export function MapScreen({navigation}: Props) {
         onGesture={onGesture}
         onUserMove={onUserMove}
       />
-      ) : null}
+      {located ? null : (
+        <View style={styles.locating} pointerEvents="none">
+          <Text style={[type.body, {color: colors.textSecondary}]}>{copy.locating}</Text>
+        </View>
+      )}
       {farFromRoads ? (
         <View style={styles.banners}>
           <View style={styles.banner}>
@@ -585,7 +599,6 @@ export function MapScreen({navigation}: Props) {
           current={cue}
           after={pair?.after}
           thenWord={copy.thenCue}
-          street={roadName || cue.street}
           night={nightMap}
         />
       ) : null}
@@ -597,7 +610,7 @@ export function MapScreen({navigation}: Props) {
         gpsCheck={gpsCheck}
         onSetup={() => openAdapterSetup()}
       />
-      {offlineNote ? (
+      {offlineNote && !cue ? (
         <View pointerEvents="none" style={styles.linkBanner}>
           <Text style={styles.linkTitle}>{copy.offline}</Text>
           <Text style={styles.linkBody}>{adapterReady ? copy.offlineObd : copy.offlinePhone}</Text>
@@ -630,9 +643,7 @@ export function MapScreen({navigation}: Props) {
       ) : null}
       {driving && edgeGap ? (
         <View style={styles.edgeBanner} pointerEvents="none">
-          <Text style={styles.edgeText}>
-            {`${copy.mapsEdge}${edgeGap.region ? ` · ${edgeGap.region.name}` : ''}`}
-          </Text>
+          <Text style={styles.edgeText}>{copy.mapsEdge}</Text>
         </View>
       ) : null}
       {coachVisible ? (
@@ -689,6 +700,7 @@ export function MapScreen({navigation}: Props) {
               target={target}
               onPickToggle={togglePicking}
               onTarget={previewRoute}
+              onClearTarget={() => setTarget(null)}
               onGo={goToTarget}
               onStop={cancelTrip}
               onFocus={startSearch}
@@ -730,7 +742,7 @@ function destinationPlace(target: Place | null, name: string | null): Place | nu
 
 const styles = StyleSheet.create({
   fill: {flex: 1},
-  locating: {position: 'absolute', top: '42%', left: 24, right: 24, alignItems: 'center'},
+  locating: {position: 'absolute', top: '42%', left: 24, right: 24, alignItems: 'center', zIndex: 5},
   linkBanner: {
     position: 'absolute',
     top: 54,
@@ -835,4 +847,26 @@ function chooseRoute(next: RoutePlan, keepFollow: boolean): void {
 
 function samePlan(left: RoutePlan, right: RoutePlan): boolean {
   return left.distanceM === right.distanceM && left.coordinates.length === right.coordinates.length;
+}
+
+function useStableOn(active: boolean, holdMs: number): boolean {
+  const [on, setOn] = useState(false);
+  const since = useRef<number | null>(null);
+  useEffect(() => {
+    if (active) {
+      if (since.current == null) {
+        since.current = Date.now();
+      }
+      const wait = holdMs - (Date.now() - since.current);
+      if (wait <= 0) {
+        setOn(true);
+        return;
+      }
+      const timer = setTimeout(() => setOn(true), wait);
+      return () => clearTimeout(timer);
+    }
+    since.current = null;
+    setOn(false);
+  }, [active, holdMs]);
+  return on;
 }

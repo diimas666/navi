@@ -21,6 +21,12 @@ import Foundation
   private var outageBase = 8.0
   private let earthRadius = 6_378_137.0
 
+  @objc public func hasValidPosition() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return hasPosition && latitude.isFinite && longitude.isFinite && (abs(latitude) > 0.01 || abs(longitude) > 0.01)
+  }
+
   @objc public func reset() {
     lock.lock()
     hasPosition = false
@@ -172,14 +178,12 @@ import Foundation
     }
 
     let gap = haversine(latitude, longitude, lat, lon)
-    let implied = dt > 0.05 ? gap / dt : gap / 0.05
-    let carLike = gap <= 50 && implied <= 28
-    if paused || carLike {
+    if paused || gap <= 70 {
       latitude = lat
       longitude = lon
       source = "gps"
     } else {
-      let catchup = min(40, max(16, implied))
+      let catchup = 40.0
       let budget = catchup * min(max(dt, 0.05), 1)
       moveToward(lat, lon, budget)
       let left = haversine(latitude, longitude, lat, lon)

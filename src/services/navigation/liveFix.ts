@@ -26,6 +26,9 @@ export function liveFixQuiet(
   if (!prior) {
     return false;
   }
+  if (snapshot.navigationActive) {
+    return haversineMeters(previous.displayLatitude, previous.displayLongitude, latitude, longitude) < 0.2;
+  }
   if (haversineMeters(previous.displayLatitude, previous.displayLongitude, latitude, longitude) > 1.5) {
     return false;
   }

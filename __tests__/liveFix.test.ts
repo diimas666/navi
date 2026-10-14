@@ -67,3 +67,28 @@ test('a km/h change or a turn wakes the map', () => {
   expect(liveFixQuiet(state, snapshot({speedMps: 13}), 46.48, 30.73, null, false, null)).toBe(false);
   expect(liveFixQuiet(state, snapshot({heading: 94}), 46.48, 30.73, null, false, null)).toBe(false);
 });
+
+test('during active navigation even small moves of 0.5m wake the map', () => {
+  const prior = snapshot({navigationActive: true});
+  const state = {
+    snapshot: prior,
+    displayLatitude: 46.48,
+    displayLongitude: 30.73,
+    roadName: null,
+    roadApplied: false,
+    crossTrackM: null,
+  };
+  // 0.5 meters movement at ~10Hz
+  expect(
+    liveFixQuiet(
+      state,
+      snapshot({navigationActive: true, latitude: 46.480005, longitude: 30.73}),
+      46.480005,
+      30.73,
+      null,
+      false,
+      null,
+    ),
+  ).toBe(false);
+});
+

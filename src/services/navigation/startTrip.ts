@@ -101,11 +101,11 @@ async function hereNow(): Promise<{latitude: number; longitude: number} | null> 
   if (Math.abs(fix.latitude) < 0.2 && Math.abs(fix.longitude) < 0.2) {
     return null;
   }
-  if (fix.horizontalAccuracy < 0 || fix.horizontalAccuracy > 250) {
+  if (fix.horizontalAccuracy < 0 || fix.horizontalAccuracy > 800) {
     return null;
   }
   const age = Date.now() - fix.timestamp;
-  if (!Number.isFinite(age) || age < 0 || age > 180_000) {
+  if (!Number.isFinite(age) || age < 0 || age > 600_000) {
     return null;
   }
   const stood = placeFix(fix.latitude, fix.longitude);
@@ -178,7 +178,11 @@ async function collectRoutes(
     return keepDistinctRoutes(streets.length > 0 ? streets : pool);
   }
   const approach = directApproach(from.latitude, from.longitude, destinationLat, destinationLon);
-  return approach ? [approach] : [];
+  if (approach) {
+    return [approach];
+  }
+  const guide = guideRoute(originLat, originLon, destinationLat, destinationLon, placeName);
+  return guide ? [guide] : [];
 }
 
 function isLongLoop(route: RoutePlan | undefined, straight: number): boolean {
@@ -233,6 +237,49 @@ function startsNear(route: RoutePlan, latitude: number, longitude: number): bool
     return false;
   }
   return haversineMeters(latitude, longitude, begin[1], begin[0]) <= LOCAL_START_M;
+}
+
+export function guideRoute(
+  originLat: number,
+  originLon: number,
+  destinationLat: number,
+  destinationLon: number,
+  placeName = '',
+): RoutePlan | null {
+  const gap = haversineMeters(originLat, originLon, destinationLat, destinationLon);
+  if (!Number.isFinite(gap) || gap < 12 || gap > 1_600_000) {
+    return null;
+  }
+  return nameArrival(
+    {
+      distanceM: gap,
+      durationS: Math.max(45, Math.round(gap / 11)),
+      via: 'graph',
+      steps: [
+        {
+          name: placeName,
+          distanceM: gap,
+          alongM: 0,
+          kind: 'depart',
+          latitude: originLat,
+          longitude: originLon,
+        },
+        {
+          name: placeName,
+          distanceM: 0,
+          alongM: gap,
+          kind: 'arrive',
+          latitude: destinationLat,
+          longitude: destinationLon,
+        },
+      ],
+      coordinates: [
+        [originLon, originLat],
+        [destinationLon, destinationLat],
+      ],
+    },
+    placeName,
+  );
 }
 
 function directApproach(

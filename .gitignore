@@ -76,3 +76,6 @@ src/constants/googleMapsKey.ts
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+tmp/
+

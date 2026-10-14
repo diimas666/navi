@@ -18,6 +18,9 @@ import UIKit
   @objc public var onSessionError: ((NSDictionary) -> Void)?
   private let speaker = AVSpeechSynthesizer()
   private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+  private var lastFixTimestamp = 0.0
+  private var lastFixLat = 0.0
+  private var lastFixLon = 0.0
 
   @objc public func speak(_ phrase: String, language: String) {
     let utterance = AVSpeechUtterance(string: phrase)
@@ -86,12 +89,24 @@ import UIKit
     preview = true
     setIdleTimer(true)
     wire()
-    DeadReckoningEngine.shared.reset()
-    LocationTrustEngine.shared.reset()
+    if !DeadReckoningEngine.shared.hasValidPosition() {
+      DeadReckoningEngine.shared.reset()
+      LocationTrustEngine.shared.reset()
+    }
     LocationManager.shared.startUpdates(true)
     _ = MotionManager.shared.start()
     publish(step: false)
     completion(true)
+  }
+
+  private func haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+    let earthRadius = 6_378_137.0
+    let p1 = lat1 * .pi / 180
+    let p2 = lat2 * .pi / 180
+    let dLat = (lat2 - lat1) * .pi / 180
+    let dLon = (lon2 - lon1) * .pi / 180
+    let a = sin(dLat / 2) * sin(dLat / 2) + cos(p1) * cos(p2) * sin(dLon / 2) * sin(dLon / 2)
+    return 2 * earthRadius * atan2(sqrt(a), sqrt(1 - a))
   }
 
   @objc public func stopNavigation() {
@@ -138,8 +153,33 @@ import UIKit
     let obd = OBDManager.shared.latest()
     let hasVehicle = NeivJSON.bool(obd, "hasSpeed")
     let vehicle = NeivJSON.double(obd, "speedKmh") / 3.6
-    let hasGpsSpeed = fix != nil && NeivJSON.bool(fix ?? [:], "hasSpeed")
-    let gpsSpeed = NeivJSON.double(fix ?? [:], "speed")
+    let rawGpsSpeed = NeivJSON.double(fix ?? [:], "speed")
+    let hasGpsSpeed = fix != nil && NeivJSON.bool(fix ?? [:], "hasSpeed") && rawGpsSpeed >= 0
+    let gpsSpeed = max(0, rawGpsSpeed)
+
+    var fallbackGpsSpeed: Double? = nil
+    if let fix = fix {
+      let fixTime = NeivJSON.double(fix, "timestamp")
+      let fixLat = NeivJSON.double(fix, "latitude")
+      let fixLon = NeivJSON.double(fix, "longitude")
+      if lastFixTimestamp > 0 && fixTime > lastFixTimestamp && (fixTime - lastFixTimestamp) <= 6000 {
+        let dtGps = (fixTime - lastFixTimestamp) / 1000.0
+        let dist = haversineDistance(lat1: lastFixLat, lon1: lastFixLon, lat2: fixLat, lon2: fixLon)
+        let calcSpeed = dist / dtGps
+        if calcSpeed >= 0.5 && calcSpeed <= 85 {
+          fallbackGpsSpeed = calcSpeed
+        }
+      }
+      if fixTime > lastFixTimestamp {
+        lastFixTimestamp = fixTime
+        lastFixLat = fixLat
+        lastFixLon = fixLon
+      }
+    }
+
+    let effectiveGpsSpeed = (hasGpsSpeed && gpsSpeed > 0) ? gpsSpeed : (fallbackGpsSpeed ?? 0)
+    let hasEffectiveGpsSpeed = (hasGpsSpeed && gpsSpeed > 0) || fallbackGpsSpeed != nil
+
     let inertial = MotionManager.shared.inertialSpeedMps()
     let jammed = trust == "lost" || trust == "untrusted"
     let followGps = !ignoreGps && fix != nil && !jammed
@@ -147,8 +187,8 @@ import UIKit
     let hasSensorSpeed = hasVehicle || inertial > 0.3
     if hasVehicle {
       MotionManager.shared.adoptSpeed(vehicle)
-    } else if followGps && trust == "trusted" && hasGpsSpeed {
-      MotionManager.shared.adoptSpeed(gpsSpeed)
+    } else if followGps && (trust == "trusted" || trust == "degraded") && hasEffectiveGpsSpeed {
+      MotionManager.shared.adoptSpeed(effectiveGpsSpeed)
     }
     let integrate = jammed && drAllowed && (navigationActive || preview)
     let input: NSDictionary = [
@@ -159,8 +199,8 @@ import UIKit
       "latitude": NeivJSON.double(fix ?? [:], "latitude"),
       "longitude": NeivJSON.double(fix ?? [:], "longitude"),
       "accuracy": NeivJSON.double(fix ?? [:], "horizontalAccuracy"),
-      "hasGpsSpeed": hasGpsSpeed,
-      "gpsSpeed": gpsSpeed,
+      "hasGpsSpeed": hasEffectiveGpsSpeed,
+      "gpsSpeed": effectiveGpsSpeed,
       "hasGpsHeading": followGps && NeivJSON.bool(fix ?? [:], "hasHeading"),
       "gpsHeading": NeivJSON.double(fix ?? [:], "heading"),
       "hasVehicleSpeed": hasSensorSpeed,
@@ -181,9 +221,9 @@ import UIKit
       speedSource = "obd"
       speed = vehicle
       hasSpeed = true
-    } else if followGps && trust == "trusted" && hasGpsSpeed {
+    } else if followGps && (trust == "trusted" || trust == "degraded") && hasEffectiveGpsSpeed {
       speedSource = "gps"
-      speed = gpsSpeed
+      speed = effectiveGpsSpeed
       hasSpeed = true
     } else if hasSensorSpeed {
       speedSource = "inertial"

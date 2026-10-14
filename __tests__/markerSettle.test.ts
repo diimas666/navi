@@ -101,3 +101,11 @@ test('GPS coordinates moving at car speed follow even when the phone reports 9 k
   const shown = step(home, fix, 1, 2.5, true);
   expect(haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude)).toBeLessThan(1);
 });
+
+test('at 10Hz motion tick rate (gapS 0.1s) a trusted GPS hop follows the fix directly without freezing', () => {
+  const fix = ahead(16);
+  // gapS is 0.1s because motion updates trigger snapshots at 10Hz
+  const shown = step(home, fix, 0.1, 0, true);
+  expect(haversineMeters(shown.latitude, shown.longitude, fix.latitude, fix.longitude)).toBeLessThan(1);
+});
+

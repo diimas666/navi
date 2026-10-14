@@ -402,12 +402,17 @@ export const NaviMap = memo(function NaviMap({
     }
     lastFollow.current = {latitude, longitude};
     lastCameraMove.current = now;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+    const bearing = Number.isFinite(course) ? course : 0;
+    const zoom = Number.isFinite(zoomRef.current) ? zoomRef.current : 14;
     try {
       settleCamera(
         cameraRef.current?.easeTo({
           center: [longitude, latitude],
-          bearing: course,
-          zoom: zoomRef.current,
+          bearing,
+          zoom,
           pitch,
           duration: pitchChanged ? 480 : pinned ? glideDuration(elapsed) : tracking ? 280 : 160,
           easing: pinned ? 'linear' : 'ease',

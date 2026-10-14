@@ -1,6 +1,8 @@
 import {haversineMeters} from '../src/utils/geo';
 import {matchToRoad} from '../src/services/roads/RoadMatcher';
-import {planRoute, planRoutes} from '../src/services/roads/Router';
+import {planRoute, planRoutes, turnSide} from '../src/services/roads/Router';
+import {guideRoute} from '../src/services/navigation/startTrip';
+import {useSessionStore} from '../src/store/sessionStore';
 import {RoadGraph, bundledGraph} from '../src/services/roads/RoadGraph';
 import {searchPlaces} from '../src/services/maps/Geocoder';
 
@@ -119,6 +121,33 @@ test('residential street is used when it is the only road to the house', () => {
     ],
   });
   expect(planRoute(graph, 50, 30, 50.002, 30.002)?.steps[0]?.name).toBe('Житлова');
+});
+
+test('lost route also ends driving so the tab bar comes back', () => {
+  useSessionStore.setState({
+    driving: true,
+    destinationName: 'Альтаїр',
+    destinationLatitude: 46.48,
+    destinationLongitude: 30.72,
+  });
+  useSessionStore.getState().markRouteMissing();
+  expect(useSessionStore.getState().driving).toBe(false);
+  expect(useSessionStore.getState().route).toBeNull();
+  expect(useSessionStore.getState().destinationName).toBe('Альтаїр');
+  expect(useSessionStore.getState().destinationLatitude).toBe(46.48);
+});
+
+test('a missing street graph still gives a line to the address', () => {
+  const guide = guideRoute(46.48, 30.72, 46.49, 30.74, 'Альтаїр');
+  expect(guide).not.toBeNull();
+  expect(guide?.coordinates).toHaveLength(2);
+  expect(guide?.distanceM).toBeGreaterThan(1000);
+  expect(guideRoute(46.48, 30.72, 46.48, 30.72)).toBeNull();
+});
+
+test('a street corner on the graph is a left or right turn', () => {
+  expect(turnSide([[30, 50], [30, 50.01]], [[30, 50.01], [30.01, 50.01]])).toBe('right');
+  expect(turnSide([[30, 50], [30, 50.01]], [[30, 50.01], [29.99, 50.01]])).toBe('left');
 });
 
 test('haversine is symmetric', () => {

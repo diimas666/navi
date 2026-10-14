@@ -1,3 +1,5 @@
+import {haversineMeters} from '../../utils/geo';
+
 const CRAWL_MPS = 0.45;
 const GPS_ROLL_MPS = 0.8;
 const ENGINE_OFF_MS = 25_000;
@@ -41,8 +43,12 @@ export function decidePark(input: ParkInput, memory: ParkMemory): ParkDecision {
     input.hasSpeed &&
     input.speedMps >= CRAWL_MPS &&
     (input.speedSource === 'obd' || input.speedSource === 'inertial');
-  const gpsMove = input.hasSpeed && input.speedMps >= GPS_ROLL_MPS && input.speedSource === 'gps' && input.autoUnlockGps;
-  const gpsShift = (input.movedM ?? 0) >= 15;
+  const gpsMove =
+    input.hasSpeed &&
+    input.speedMps >= GPS_ROLL_MPS &&
+    (input.speedSource === 'gps' || input.speedSource === 'blended') &&
+    input.autoUnlockGps;
+  const gpsShift = (input.movedM ?? 0) >= 8;
   const rolling = sensorMove || gpsMove || gpsShift;
   const since = rolling ? 0 : memory.stillSince || input.now;
 
@@ -58,7 +64,21 @@ export function decidePark(input: ParkInput, memory: ParkMemory): ParkDecision {
     return {action, latitude: input.latitude, longitude: input.longitude, memory: emptyMemory()};
   }
 
-  if (input.navigationActive || input.engineRunning === true) {
+  if (input.navigationActive) {
+    if (input.locked) {
+      return follow(input, emptyMemory());
+    }
+    const fromAnchor =
+      memory.anchorLatitude != null && memory.anchorLongitude != null
+        ? haversineMeters(memory.anchorLatitude, memory.anchorLongitude, input.latitude, input.longitude)
+        : 0;
+    if (fromAnchor >= 8) {
+      return {action: 'follow', latitude: input.latitude, longitude: input.longitude, memory: emptyMemory()};
+    }
+    return anchor(input, memory, since);
+  }
+
+  if (input.engineRunning === true) {
     if (input.locked) {
       return holdLock(input, {...memory, stillSince: since});
     }

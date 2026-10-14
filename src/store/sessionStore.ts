@@ -104,9 +104,7 @@ export const useSessionStore = create<SessionState>(set => ({
     set({
       route: null,
       alternatives: [],
-      destinationName: null,
-      destinationLatitude: null,
-      destinationLongitude: null,
+      driving: false,
       routeMissing: true,
       routeNote: note ?? uiCopy(useSettingsStore.getState().language).routeMissing,
     }),

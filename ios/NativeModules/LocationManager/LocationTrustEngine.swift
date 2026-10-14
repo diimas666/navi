@@ -48,20 +48,22 @@ import Foundation
     }
 
     let age = Date().timeIntervalSince1970 * 1000 - sample.timestamp
-    if age > 3_000 {
+    if age > 10_000 {
       return result("lost", "stale")
     }
 
     lock.lock()
     let prior = previous
-    previous = sample
+    if prior == nil || sample.timestamp > prior!.timestamp {
+      previous = sample
+    }
     lock.unlock()
 
     if sample.accuracy > 120 {
       return result("untrusted", "poor_accuracy")
     }
 
-    if let prior {
+    if let prior, prior.timestamp < sample.timestamp {
       let dt = (sample.timestamp - prior.timestamp) / 1000
       if dt > 0, dt < 8 {
         let distance = haversine(prior.latitude, prior.longitude, sample.latitude, sample.longitude)
@@ -78,7 +80,7 @@ import Foundation
       }
     }
 
-    if sample.accuracy > 35 {
+    if sample.accuracy > 65 {
       return result("degraded", "degraded_accuracy")
     }
     return result("trusted", "ok")

@@ -1,5 +1,5 @@
 import type {RoutePlan} from '../../models/domain';
-import {haversineMeters} from '../../utils/geo';
+import {bearingDegrees, haversineMeters} from '../../utils/geo';
 import type {IndexedEdge, RoadGraph} from './RoadGraph';
 import {highwayLimitKmh} from '../navigation/speedLimit';
 
@@ -49,7 +49,7 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
   const coordinates: Array<[number, number]> = [];
   const steps: RoutePlan['steps'] = [];
   let distanceM = 0;
-  path.forEach(edge => {
+  path.forEach((edge, index) => {
     const slice = coordinates.length > 0 ? edge.coordinates.slice(1) : edge.coordinates;
     coordinates.push(...slice);
     const previous = steps[steps.length - 1];
@@ -57,6 +57,7 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
       previous.distanceM += edge.lengthM;
     } else {
       const [longitude, latitude] = edge.coordinates[0] ?? [0, 0];
+      const prior = path[index - 1];
       steps.push({
         name: edge.name,
         distanceM: edge.lengthM,
@@ -64,6 +65,7 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
         latitude,
         longitude,
         kind: steps.length === 0 ? 'depart' : 'turn',
+        modifier: prior ? turnSide(prior.coordinates, edge.coordinates) : undefined,
         speedKmh: highwayLimitKmh(edge.highway),
       });
     }
@@ -75,6 +77,34 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
     steps,
     coordinates,
   };
+}
+
+export function turnSide(
+  from: Array<[number, number]>,
+  to: Array<[number, number]>,
+): 'left' | 'right' | 'straight' | 'uturn' | undefined {
+  const start = from.length >= 2 ? from[from.length - 2] : from[0];
+  const mid = from[from.length - 1] ?? to[0];
+  const end = to.length >= 2 ? to[1] : to[0];
+  if (!start || !mid || !end) {
+    return undefined;
+  }
+  const incoming = bearingDegrees(start[1], start[0], mid[1], mid[0]);
+  const outgoing = bearingDegrees(mid[1], mid[0], end[1], end[0]);
+  let delta = outgoing - incoming;
+  if (delta > 180) {
+    delta -= 360;
+  }
+  if (delta < -180) {
+    delta += 360;
+  }
+  if (Math.abs(delta) < 28) {
+    return 'straight';
+  }
+  if (Math.abs(delta) > 155) {
+    return 'uturn';
+  }
+  return delta > 0 ? 'right' : 'left';
 }
 
 function driveCost(edge: IndexedEdge, avoid: Set<string>): number {

@@ -40,6 +40,7 @@ export async function streetRoutes(
     ...stops.map(stop => [stop.longitude, stop.latitude]),
     [destinationLon, destinationLat],
   ];
+  const osrmTask = osrmRoutes(points, heading, stops.length > 0);
   if (googleDrivingReady()) {
     try {
       const google = await googleDrivingRoutes(originLat, originLon, destinationLat, destinationLon, stops);
@@ -50,7 +51,7 @@ export async function streetRoutes(
       // Google Directions can be restricted. OSRM still answers.
     }
   }
-  const ranked = await osrmRoutes(points, heading, stops.length > 0);
+  const ranked = await osrmTask;
   if (ranked.length === 0 && heading != null) {
     return osrmRoutes(points, null, stops.length > 0);
   }
@@ -69,7 +70,7 @@ async function osrmRoutes(
     steps: 'true',
     alternatives: hasStops ? 'false' : '3',
     approaches: points.map(() => 'unrestricted').join(';'),
-    radiuses: points.map(() => '120').join(';'),
+    radiuses: points.map(() => '450').join(';'),
     continue_straight: 'false',
   });
   if (heading != null && Number.isFinite(heading)) {

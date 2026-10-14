@@ -27,6 +27,9 @@ export function settleMarker(input: MarkerSettleInput): {latitude: number; longi
   if (gap <= 2.5 && distance <= 50 && implied <= 28) {
     return {latitude: input.latitude, longitude: input.longitude};
   }
+  if (input.trustFix && distance <= 45) {
+    return {latitude: input.latitude, longitude: input.longitude};
+  }
   const step = Math.min(Math.max(gap, 0.05), 2);
   const live = Math.max(0, input.speedMps) * step + 4;
   if (input.trustFix && gap <= 2.5 && distance <= live) {

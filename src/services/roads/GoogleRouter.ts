@@ -4,6 +4,7 @@ import {GOOGLE_MAPS_KEY} from '../../constants/googleMapsKey';
 import type {RoutePlan} from '../../models/domain';
 import {uiCopy} from '../../i18n/uiCopy';
 import {useSettingsStore} from '../../store/settingsStore';
+import {modifierFromInstruction, streetFromInstruction} from '../navigation/instruction';
 import {geometryStartsNear} from '../navigation/placeFix';
 
 const HEADERS: Record<string, string> =
@@ -92,7 +93,7 @@ export async function googleDrivingRoutes(
           longitude: step.start_location?.lng,
           coordinates: decodePolyline(step.polyline?.points ?? ''),
           kind: googleKind(step.maneuver),
-          modifier: googleModifier(step.maneuver),
+          modifier: googleModifier(step.maneuver) ?? modifierFromInstruction(step.html_instructions ?? ''),
         };
         alongM += step.distance?.value ?? 0;
         return item;
@@ -180,7 +181,9 @@ async function routesApiRoutes(
           longitude: step.startLocation?.latLng?.longitude,
           coordinates: decodePolyline(step.polyline?.encodedPolyline ?? ''),
           kind: googleKind(step.navigationInstruction?.maneuver),
-          modifier: googleModifier(step.navigationInstruction?.maneuver),
+          modifier:
+            googleModifier(step.navigationInstruction?.maneuver) ??
+            modifierFromInstruction(step.navigationInstruction?.instructions ?? ''),
         };
         alongM += step.distanceMeters ?? 0;
         return item;
@@ -237,12 +240,14 @@ function streetName(html: string | undefined, fallback: string): string {
   if (!html) {
     return fallback;
   }
-  const text = html
-    .replace(/<div[^>]*>[\s\S]*?<\/div>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const text = streetFromInstruction(
+    html
+      .replace(/<div[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  );
   return text.length > 1 ? text : fallback;
 }
 

@@ -80,3 +80,21 @@ test('GPS coordinates that jumped 40 m unlock the parked marker', () => {
   );
   expect(moved.action).toBe('follow');
 });
+
+test('active navigation with existing parking lock automatically unlocks and follows', () => {
+  const lockedState = stopped({navigationActive: true, locked: true, manualLock: false});
+  const decision = decidePark(lockedState, memory);
+  expect(decision.action).toBe('unlock');
+});
+
+test('active navigation moving 10m from anchor releases anchor', () => {
+  const held = decidePark(stopped({navigationActive: true, latitude: 50.45, longitude: 30.52}), memory);
+  expect(held.action).toBe('anchor');
+  // Moving ~11 meters North
+  const moved = decidePark(
+    stopped({navigationActive: true, latitude: 50.4501, longitude: 30.52}),
+    held.memory,
+  );
+  expect(moved.action).toBe('follow');
+});
+

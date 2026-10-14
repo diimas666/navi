@@ -1,6 +1,7 @@
 import type {LaneHint, RoutePlan, RouteStep} from '../../models/domain';
 import {haversineMeters, projectOntoSegment} from '../../utils/geo';
 import type {ResolvedLanguage} from '../../i18n/settingsCopy';
+import {modifierFromInstruction, streetFromInstruction} from './instruction';
 
 export type ManeuverTurn = 'left' | 'right' | 'straight' | 'uturn' | 'arrive';
 
@@ -87,6 +88,17 @@ export function progressAlong(
   return progressOnLine(coordinates, latitude, longitude).alongM;
 }
 
+export function lineOffsetM(
+  coordinates: Array<[number, number]>,
+  latitude: number,
+  longitude: number,
+): number {
+  if (coordinates.length < 2) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return progressOnLine(coordinates, latitude, longitude).offM;
+}
+
 export function remainingCoordinates(
   coordinates: Array<[number, number]>,
   latitude: number,
@@ -131,7 +143,7 @@ function progressOnLine(
   coordinates: Array<[number, number]>,
   latitude: number,
   longitude: number,
-): {alongM: number; index: number; latitude: number; longitude: number} {
+): {alongM: number; index: number; latitude: number; longitude: number; offM: number} {
   const hinted = progressLine === coordinates ? Math.max(0, progressIndex - 2) : 0;
   const nearby = scanLine(coordinates, latitude, longitude, hinted, hinted + PROGRESS_LOOK);
   const missed = nearby.offM > 80;
@@ -179,11 +191,17 @@ function scanLine(
 }
 
 function stepCue(step: RouteStep, meters: number, text: (typeof words)['uk']): ManeuverCue {
+  const street = streetFromInstruction(step.name);
+  const cleaned: RouteStep = {
+    ...step,
+    name: street,
+    modifier: step.modifier || modifierFromInstruction(step.name),
+  };
   return {
     meters,
-    title: cueTitle(step, text),
-    turn: cueTurn(step),
-    street: step.name.trim(),
+    title: cueTitle(cleaned, text),
+    turn: cueTurn(cleaned),
+    street,
     lanes: step.lanes ?? [],
   };
 }
@@ -193,37 +211,35 @@ function arriveCue(meters: number, title: string): ManeuverCue {
 }
 
 function straightCue(meters: number, title: string, street: string): ManeuverCue {
-  return {meters, title: street ? `${title} · ${street}` : title, turn: 'straight', street, lanes: []};
+  return {meters, title, turn: 'straight', street, lanes: []};
 }
 
 function cueTitle(step: RouteStep, text: (typeof words)['uk']): string {
   const kind = step.kind ?? '';
   const modifier = step.modifier ?? '';
-  const street = step.name.trim();
   if (kind === 'arrive') {
     return text.arrived;
   }
   if (kind === 'roundabout' || kind === 'rotary' || kind === 'exit roundabout') {
     if (step.exit && step.exit > 0) {
-      return street ? `${text.exit(step.exit)} · ${street}` : text.exit(step.exit);
+      return text.exit(step.exit);
     }
-    return street ? `${text.roundabout} · ${street}` : text.roundabout;
+    return text.roundabout;
   }
   if (kind === 'uturn' || modifier === 'uturn') {
     return text.uturn;
   }
   const side = sideWord(modifier, text);
   if (kind === 'fork' || kind === 'end of road') {
-    const fork = side ? `${text.fork} ${side}` : text.fork;
-    return street ? `${fork} · ${street}` : fork;
+    return side ? `${text.fork} ${side}` : text.fork;
   }
   if (modifier === 'straight' || kind === 'continue' || kind === 'new name') {
-    return street ? `${text.straight} · ${street}` : text.straight;
+    return text.straight;
   }
   if (side) {
-    return street ? `${side[0]?.toUpperCase()}${side.slice(1)} · ${street}` : `${text.turn} ${side}`;
+    return `${side[0]?.toUpperCase() ?? ''}${side.slice(1)}`;
   }
-  return street || text.straight;
+  return text.turn;
 }
 
 function cueTurn(step: RouteStep): ManeuverTurn {
