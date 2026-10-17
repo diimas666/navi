@@ -1,10 +1,11 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {FlatList, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {PACK_MAX_ZOOM, REGIONS} from '../constants/map';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {toAppError} from '../services/errors/AppError';
 import {downloadRegion, removeRegion} from '../services/maps/OfflineMapService';
+import {loadManifest} from '../services/maps/mapFiles';
 import {regionIsStale} from '../services/maps/regionCoverage';
 import {uiCopy} from '../i18n/uiCopy';
 import {useMapStore} from '../store/mapStore';
@@ -39,6 +40,25 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
   const text = confirmCopy[resolveLanguage(language)];
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const online = useMapStore(state => state.online);
+  const [fileMb, setFileMb] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let live = true;
+    loadManifest(online)
+      .then(manifest => {
+        if (live && manifest) {
+          const sizes: Record<string, number> = {};
+          Object.entries(manifest.regions).forEach(([id, entry]) => {
+            sizes[id] = Math.max(1, Math.round(entry.bytes / 1_000_000));
+          });
+          setFileMb(sizes);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [online]);
   const pending = REGIONS.find(region => region.id === confirmId) ?? null;
   const wanted = new Set(need);
   const rows = [...REGIONS].sort((left, right) => {
@@ -63,7 +83,9 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
         const downloaded = state?.status === 'downloaded';
         const downloading = state?.status === 'downloading';
         const needed = wanted.has(item.id) && !downloaded;
-        const stale = downloaded && (regionIsStale(state?.updatedAt) || state?.packZoom !== PACK_MAX_ZOOM);
+        const stale =
+          downloaded &&
+          (regionIsStale(state?.updatedAt) || (state?.fileVersion == null && state?.packZoom !== PACK_MAX_ZOOM));
         const progress = downloading ? Math.max(0.02, Math.min(1, state?.progress ?? 0)) : downloaded ? 1 : 0;
         const percent = Math.round(progress * 100);
         const fill = {
@@ -78,7 +100,7 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
             <View style={styles.copy}>
               <Text style={[type.bodyStrong, {color: colors.textPrimary}]}>{item.name}</Text>
               <Text style={[type.caption, {color: colors.textSecondary}]}>
-                {item.sizeMb} МБ
+                {fileMb[item.id] ?? item.sizeMb} МБ
                 {downloaded ? ' · на телефоні' : ''}
                 {needed ? ` · ${copy.mapsNeed}` : ''}
                 {stale ? ` · ${copy.mapsStale}` : ''}

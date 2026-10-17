@@ -1,4 +1,4 @@
-import {memo, useEffect, useMemo, useRef, useState, type MutableRefObject} from 'react';
+import {Fragment, memo, useEffect, useMemo, useRef, useState, type MutableRefObject} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {
   Camera,
@@ -13,6 +13,8 @@ import type {StyleSpecification} from '@maplibre/maplibre-gl-style-spec';
 import {GOOGLE_MAPS_KEY} from '../constants/googleMapsKey';
 import {DARK_STYLE_URL, VECTOR_STYLE_URL} from '../constants/map';
 import {loadBasemapStyle} from '../services/maps/basemapStyle';
+import {loadLocalStyle} from '../services/maps/mapFiles';
+import {localFontStack, REMOTE_SOURCE, tileSources, usesLocalGlyphs} from '../services/maps/offlineStyle';
 import {cityDistrictFeatures, cityNameFeatures, districtFeatures} from '../services/maps/districts';
 import {
   fetchNearbyPlaces,
@@ -61,6 +63,11 @@ function chooseMapStyle(
     return basemap;
   }
   return mode === 'dark' ? DARK_STYLE_URL : VECTOR_STYLE_URL;
+}
+
+/** Our building and house-number layers repeat for every tile source, like the style layers do. */
+function sourceLayerId(base: string, source: string): string {
+  return source === REMOTE_SOURCE ? base : `${base}@${source}`;
 }
 
 function settleCamera(pending: unknown) {
@@ -160,6 +167,18 @@ export const NaviMap = memo(function NaviMap({
       : 0;
   const pitch = pitched ? 58 : 0;
   const [basemap, setBasemap] = useState<StyleSpecification | null>(null);
+  const fileRegions = useMapStore(state =>
+    Object.values(state.regions)
+      // A region file stays usable while its streets or houses download again.
+      .filter(region => region.fileVersion != null)
+      .map(region => region.id)
+      .sort()
+      .join(','),
+  );
+  const sources = basemap ? tileSources(basemap) : [REMOTE_SOURCE];
+  const localGlyphs = basemap ? usesLocalGlyphs(basemap) : false;
+  const fontRegular = localGlyphs ? localFontStack(MAP_FONT_REGULAR) : MAP_FONT_REGULAR;
+  const fontBold = localGlyphs ? localFontStack(MAP_FONT_BOLD) : MAP_FONT_BOLD;
   const [view, setView] = useState({latitude, longitude, zoom: zoomRef.current});
   const online = useMapStore(state => state.online);
   const linkKnown = useMapStore(state => state.linkKnown);
@@ -168,7 +187,7 @@ export const NaviMap = memo(function NaviMap({
   const [nearby, setNearby] = useState<NearbyPlace[]>([]);
   const [picked, setPicked] = useState<NearbyPlace | null>(null);
   const [hours, setHours] = useState<PlaceHours | null>(null);
-  const styleKind = `${mapMode}:${basemap ? 'styled' : 'url'}`;
+  const styleKind = `${mapMode}:${basemap ? (localGlyphs ? `local:${sources.join(',')}` : 'styled') : 'url'}`;
   const seenStyle = useRef(styleKind);
   const styleGeneration = useRef(0);
   if (seenStyle.current !== styleKind) {
@@ -327,15 +346,19 @@ export const NaviMap = memo(function NaviMap({
 
   useEffect(() => {
     let live = true;
-    loadBasemapStyle(mapMode).then(style => {
-      if (live && style) {
-        setBasemap(style);
-      }
-    });
+    const regionIds = fileRegions.length > 0 ? fileRegions.split(',') : [];
+    loadLocalStyle(mapMode, regionIds)
+      .catch(() => null)
+      .then(local => local ?? loadBasemapStyle(mapMode))
+      .then(style => {
+        if (live && style) {
+          setBasemap(style);
+        }
+      });
     return () => {
       live = false;
     };
-  }, [mapMode]);
+  }, [mapMode, fileRegions]);
 
   useEffect(() => {
     if (!mapReady || zoomToken === 0) {
@@ -545,58 +568,62 @@ export const NaviMap = memo(function NaviMap({
             pitch: 0,
           }}
         />
-        <Layer
-          id="building-3d"
-          type="fill-extrusion"
-          source="openmaptiles"
-          source-layer="building"
-          beforeId={streetLabels}
-          minzoom={14.5}
-          filter={['!=', ['get', 'hide_3d'], true]}
-          layout={{visibility: buildingLayerVisibility(pitched)['building-3d']}}
-          paint={{
-            'fill-extrusion-color': mapMode === 'dark' ? '#6A7384' : '#D7D2C8',
-            'fill-extrusion-height': ['max', ['to-number', ['get', 'render_height']], 8],
-            'fill-extrusion-base': ['coalesce', ['to-number', ['get', 'render_min_height']], 0],
-            'fill-extrusion-opacity': 0.96,
-            'fill-extrusion-vertical-gradient': true,
-          }}
-        />
-        <Layer
-          id="building-2d"
-          type="fill"
-          source="openmaptiles"
-          source-layer="building"
-          beforeId={streetLabels}
-          minzoom={13}
-          layout={{visibility: buildingLayerVisibility(pitched)['building-2d']}}
-          paint={{
-            'fill-color': mapMode === 'dark' ? '#6B7484' : '#D4CFC4',
-            'fill-opacity': 0.94,
-            'fill-outline-color': mapMode === 'dark' ? '#4A5260' : '#C4BDB0',
-          }}
-        />
-        <Layer
-          id="tile-housenumbers"
-          type="symbol"
-          source="openmaptiles"
-          source-layer="housenumber"
-          minzoom={14}
-          layout={{
-            'text-field': ['to-string', ['coalesce', ['get', 'housenumber'], ['get', 'name']]],
-            'text-font': MAP_FONT_REGULAR,
-            'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 17, 13, 19, 16],
-            'text-padding': 2,
-            // Saved addresses place first. A tile number near one is the same house and stays hidden.
-            'text-allow-overlap': false,
-            'text-ignore-placement': false,
-          }}
-          paint={{
-            'text-color': mapMode === 'dark' ? '#F0ECF8' : '#3A3348',
-            'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#FFFFFF',
-            'text-halo-width': 1.6,
-          }}
-        />
+        {sources.map(source => (
+          <Fragment key={source}>
+            <Layer
+              id={sourceLayerId('building-3d', source)}
+              type="fill-extrusion"
+              source={source}
+              source-layer="building"
+              beforeId={streetLabels}
+              minzoom={14.5}
+              filter={['!=', ['get', 'hide_3d'], true]}
+              layout={{visibility: buildingLayerVisibility(pitched)['building-3d']}}
+              paint={{
+                'fill-extrusion-color': mapMode === 'dark' ? '#6A7384' : '#D7D2C8',
+                'fill-extrusion-height': ['max', ['to-number', ['get', 'render_height']], 8],
+                'fill-extrusion-base': ['coalesce', ['to-number', ['get', 'render_min_height']], 0],
+                'fill-extrusion-opacity': 0.96,
+                'fill-extrusion-vertical-gradient': true,
+              }}
+            />
+            <Layer
+              id={sourceLayerId('building-2d', source)}
+              type="fill"
+              source={source}
+              source-layer="building"
+              beforeId={streetLabels}
+              minzoom={13}
+              layout={{visibility: buildingLayerVisibility(pitched)['building-2d']}}
+              paint={{
+                'fill-color': mapMode === 'dark' ? '#6B7484' : '#D4CFC4',
+                'fill-opacity': 0.94,
+                'fill-outline-color': mapMode === 'dark' ? '#4A5260' : '#C4BDB0',
+              }}
+            />
+            <Layer
+              id={sourceLayerId('tile-housenumbers', source)}
+              type="symbol"
+              source={source}
+              source-layer="housenumber"
+              minzoom={14}
+              layout={{
+                'text-field': ['to-string', ['coalesce', ['get', 'housenumber'], ['get', 'name']]],
+                'text-font': fontRegular,
+                'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 17, 13, 19, 16],
+                'text-padding': 2,
+                // Saved addresses place first. A tile number near one is the same house and stays hidden.
+                'text-allow-overlap': false,
+                'text-ignore-placement': false,
+              }}
+              paint={{
+                'text-color': mapMode === 'dark' ? '#F0ECF8' : '#3A3348',
+                'text-halo-color': mapMode === 'dark' ? '#1C1430' : '#FFFFFF',
+                'text-halo-width': 1.6,
+              }}
+            />
+          </Fragment>
+        ))}
         {showAreaNames ? (
           <>
             <GeoJSONSource id="city-names" data={cityNameMarks}>
@@ -607,7 +634,7 @@ export const NaviMap = memo(function NaviMap({
                 maxzoom={12.4}
                 layout={{
                   'text-field': ['get', 'name'],
-                  'text-font': MAP_FONT_BOLD,
+                  'text-font': fontBold,
                   'text-size': 18,
                   'text-transform': 'uppercase',
                   'text-letter-spacing': 0.12,
@@ -632,7 +659,7 @@ export const NaviMap = memo(function NaviMap({
                 maxzoom={11.2}
                 layout={{
                   'text-field': ['get', 'name'],
-                  'text-font': MAP_FONT_BOLD,
+                  'text-font': fontBold,
                   'text-size': 13,
                   'text-transform': 'uppercase',
                   'text-letter-spacing': 0.08,
@@ -657,7 +684,7 @@ export const NaviMap = memo(function NaviMap({
                 maxzoom={16.4}
                 layout={{
                   'text-field': ['get', 'name'],
-                  'text-font': MAP_FONT_BOLD,
+                  'text-font': fontBold,
                   'text-size': 15,
                   'text-transform': 'uppercase',
                   'text-letter-spacing': 0.06,
@@ -697,7 +724,7 @@ export const NaviMap = memo(function NaviMap({
               minzoom={14}
               layout={{
                 'text-field': ['get', 'house'],
-                'text-font': MAP_FONT_REGULAR,
+                'text-font': fontRegular,
                 'text-size': 13,
                 'text-allow-overlap': true,
                 'text-ignore-placement': false,
@@ -754,7 +781,7 @@ export const NaviMap = memo(function NaviMap({
               layout={{
                 'symbol-placement': 'line',
                 'text-field': ['get', 'name'],
-                'text-font': MAP_FONT_REGULAR,
+                'text-font': fontRegular,
                 'text-size': 14,
                 'text-max-angle': 28,
                 'text-padding': 4,

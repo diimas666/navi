@@ -14,6 +14,7 @@
 		1E7DFCA89EB885BFADE814B3 /* LocationTrustEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A43BD56BD23FFCB0903A62A /* LocationTrustEngine.swift */; };
 		2C799C47CCF01A8EABEBC0B5 /* MapStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3A306BEF96A2A6BE174B0A /* MapStore.swift */; };
 		34590F2549053A33B180B320 /* RCTNativeMotionManager.mm in Sources */ = {isa = PBXBuildFile; fileRef = 68045456645794257549457A /* RCTNativeMotionManager.mm */; };
+		458237EC90FA9D84B3EAC692 /* MapDownloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E6A6AA28B7C66045D3F5741 /* MapDownloads.swift */; };
 		494CC86E37667879814B490F /* RCTNativeMapStore.mm in Sources */ = {isa = PBXBuildFile; fileRef = 71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */; };
 		6BDD5DCAE7B0F8177133EC8A /* ELM327Parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A11EE59A810993C6A38189 /* ELM327Parser.swift */; };
 		72F67E529387B2046346E919 /* NeivJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */; };
@@ -42,6 +43,7 @@
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = Neiv/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-Neiv.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Neiv.debug.xcconfig"; path = "Target Support Files/Pods-Neiv/Pods-Neiv.debug.xcconfig"; sourceTree = "<group>"; };
 		3E585704B8B57C9EB17D23C1 /* TripSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TripSession.swift; sourceTree = "<group>"; };
+		3E6A6AA28B7C66045D3F5741 /* MapDownloads.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MapDownloads.swift; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-Neiv.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Neiv.release.xcconfig"; path = "Target Support Files/Pods-Neiv/Pods-Neiv.release.xcconfig"; sourceTree = "<group>"; };
 		5ACDB25B4CE528D9A105EF5C /* RCTNativeOBDManager.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeOBDManager.h; sourceTree = "<group>"; };
 		5B4051499F2CBAB7D9FBB278 /* DeadReckoningEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeadReckoningEngine.swift; sourceTree = "<group>"; };
@@ -63,6 +65,7 @@
 		AC79C4CBEB84AFD65423787C /* RCTNativeTripSession.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeTripSession.h; sourceTree = "<group>"; };
 		B2D1EF22C3B4506199F72D12 /* SpeechDictation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpeechDictation.swift; sourceTree = "<group>"; };
 		B2E3514B5887357163BFC974 /* RCTNativeLocationManager.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTNativeLocationManager.mm; sourceTree = "<group>"; };
+		B3605D7030C5C22F1DF1C475 /* NeivObjCImports.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = NeivObjCImports.h; sourceTree = "<group>"; };
 		C4A8B33BAC0A034AD73F0D11 /* MotionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MotionManager.swift; sourceTree = "<group>"; };
 		D4F3044E5D67283BB1194F34 /* RCTSpeechDictation.mm */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.objcpp; path = RCTSpeechDictation.mm; sourceTree = "<group>"; };
 		DA18F8FB57F7F83BC61D57CC /* RCTNativeDeadReckoningEngine.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = RCTNativeDeadReckoningEngine.h; sourceTree = "<group>"; };
@@ -89,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				A91B53E4DDC8C0455EA01A69 /* NeivJSON.swift */,
+				B3605D7030C5C22F1DF1C475 /* NeivObjCImports.h */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -199,6 +203,7 @@
 				8A3A306BEF96A2A6BE174B0A /* MapStore.swift */,
 				75A721A04E4C24E145F9E43E /* RCTNativeMapStore.h */,
 				71441CAAB73C3983E6628953 /* RCTNativeMapStore.mm */,
+				3E6A6AA28B7C66045D3F5741 /* MapDownloads.swift */,
 			);
 			path = MapStore;
 			sourceTree = "<group>";
@@ -427,6 +432,7 @@
 				72F67E529387B2046346E919 /* NeivJSON.swift in Sources */,
 				A1C0DE11B2A34F5088E61C01 /* SpeechDictation.swift in Sources */,
 				C3E2F033D4C56172AA083E23 /* RCTSpeechDictation.mm in Sources */,
+				458237EC90FA9D84B3EAC692 /* MapDownloads.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

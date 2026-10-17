@@ -19,6 +19,8 @@ import {distanceToRoute} from '../services/navigation/offRoute';
 import {geometryStartsNear, placeFix} from '../services/navigation/placeFix';
 import {loadLastPlace, rememberPlace} from '../services/navigation/lastPlace';
 import {centerMovedFar, setLoadCenter} from '../services/maps/nearFirst';
+import {startRouteDr, stepRouteDr, type RouteDrState} from '../services/navigation/routeDr';
+import {progressAlong} from '../services/navigation/maneuver';
 import {planTrip, rebuildIfOffRoute} from '../services/navigation/startTrip';
 import {loadPlaces} from '../services/places/PlacesRepository';
 import {loadSearchHistory} from '../services/search/SearchHistoryRepository';
@@ -191,7 +193,16 @@ export function useAppServices(): void {
       let roadName: string | null = null;
       let applied = false;
       let crossTrackM: number | null = null;
-      if (snapshot.hasEstimate && (snapshot.source === 'dr' || snapshot.source === 'blended')) {
+      const alongRoute =
+        snapshot.hasEstimate && snapshot.source === 'dr' ? followRouteDr(snapshot, latitude, longitude) : null;
+      if (snapshot.source !== 'dr') {
+        routeDr = null;
+      }
+      if (alongRoute) {
+        latitude = alongRoute.latitude;
+        longitude = alongRoute.longitude;
+        applied = true;
+      } else if (snapshot.hasEstimate && (snapshot.source === 'dr' || snapshot.source === 'blended')) {
         const match = matchToRoad(
           routingGraph(),
           latitude,
@@ -294,6 +305,30 @@ export function useAppServices(): void {
       sessionSub?.remove();
     };
   }, []);
+}
+
+let routeDr: {line: Array<[number, number]>; state: RouteDrState} | null = null;
+
+/** While jammed on an active route, the estimate moves along the route line. Null once the car leaves it. */
+function followRouteDr(
+  snapshot: {navigationActive: boolean; accuracy: number},
+  latitude: number,
+  longitude: number,
+): {latitude: number; longitude: number} | null {
+  const session = useSessionStore.getState();
+  const line = session.route?.coordinates;
+  if (!snapshot.navigationActive || !line || line.length < 2) {
+    routeDr = null;
+    return null;
+  }
+  if (!routeDr || routeDr.line !== line) {
+    const fromLat = session.displayLatitude ?? latitude;
+    const fromLon = session.displayLongitude ?? longitude;
+    routeDr = {line, state: startRouteDr(progressAlong(line, fromLat, fromLon), {latitude, longitude})};
+  }
+  const next = stepRouteDr(routeDr.state, line, {latitude, longitude}, snapshot.accuracy);
+  routeDr = {line, state: next.state};
+  return next.point;
 }
 
 let offlineReload: Promise<void> | null = null;

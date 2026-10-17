@@ -9,6 +9,8 @@ export type RegionDownload = {
   detail: string | null;
   updatedAt: number | null;
   packZoom?: number;
+  /** Release version of the downloaded region file, when the map comes from a .pmtiles file. */
+  fileVersion?: string;
 };
 
 type MapState = {

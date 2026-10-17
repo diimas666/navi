@@ -26,7 +26,7 @@ const loading = new Map<BasemapMode, Promise<StyleSpecification | null>>();
 
 const LOCAL_NAME = ['coalesce', ['get', 'name:nonlatin'], ['get', 'name']];
 
-function hideBasemapDistricts(style: StyleSpecification): StyleSpecification {
+export function hideBasemapDistricts(style: StyleSpecification): StyleSpecification {
   const layers = style.layers.map(layer => {
     if (layer.type !== 'symbol') {
       return layer;

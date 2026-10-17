@@ -22,6 +22,7 @@ import {
 import {downloadRegionHouses, forgetRegionHouses, housesAreComplete, reopenHouseDownload} from './houseDownload';
 import {fetchRegionRoads, reopenStreetDownload, saveRegionRoads, streetsAreComplete} from '../roads/RegionRoads';
 import {routingGraph} from '../roads/RegionGraph';
+import {downloadRegionFile, ensureSharedFiles, loadManifest, regionFileBytes, removeRegionFile} from './mapFiles';
 
 const KEY = 'neiv.regions.v1';
 const runningDownloads = new Set<string>();
@@ -72,58 +73,43 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
   if (options?.refresh) {
     await reopenHouseDownload(region.id);
     await reopenStreetDownload(region.id);
-    if (existing?.packId) {
-      try {
-        await OfflineManager.deletePack(existing.packId);
-      } catch {
-        // The next pack create fills the tiles again.
-      }
-    }
   }
-  const hasPack = Boolean(existing?.packId) && !options?.refresh && existing?.packZoom === PACK_MAX_ZOOM;
   useMapStore.getState().patchRegion(region.id, {
     status: 'downloading',
-    progress: hasPack ? 0.68 : 0.02,
+    progress: 0.02,
     error: null,
     detail: options?.refresh ? uiCopy(useSettingsStore.getState().language).mapsUpdating : null,
   });
   try {
-    let packId = hasPack ? existing?.packId ?? null : null;
-    if (!hasPack && existing?.packId && !options?.refresh) {
-      try {
-        await OfflineManager.deletePack(existing.packId);
-      } catch {
-        // The new pack fills the tiles again.
+    const manifest = await loadManifest(true);
+    let packId = existing?.packId ?? null;
+    if (manifest?.regions[region.id]) {
+      const current =
+        !options?.refresh &&
+        existing?.fileVersion != null &&
+        (await regionFileBytes(region.id)) === manifest.regions[region.id].bytes;
+      if (!current) {
+        await ensureSharedFiles(manifest);
+        throwIfPaused(stamp);
+        await downloadRegionFile(manifest, region.id, fraction => {
+          noteDownloadPulse();
+          useMapStore.getState().patchRegion(region.id, {progress: Math.max(0.02, Math.min(0.68, fraction * 0.68))});
+        });
       }
-    }
-    if (!packId) {
-      const pack = await OfflineManager.createPack(
-        {
-          mapStyle: VECTOR_STYLE_URL,
-          bounds: [region.west, region.south, region.east, region.north],
-          minZoom: 8,
-          maxZoom: PACK_MAX_ZOOM,
-          metadata: {id: region.id},
-        },
-        (_offlinePack, status) => {
-          const ratio =
-            status.requiredResourceCount > 0
-              ? status.completedResourceCount / status.requiredResourceCount
-              : status.percentage / 100;
-          useMapStore.getState().patchRegion(region.id, {
-            progress: Math.max(0.02, Math.min(0.68, ratio * 0.68)),
-          });
-        },
-        (_offlinePack, error) => {
-          useMapStore.getState().patchRegion(region.id, {
-            status: 'error',
-            error: error.message,
-          });
-        },
-      );
-      packId = pack.id;
-      useMapStore.getState().patchRegion(region.id, {packId, packZoom: PACK_MAX_ZOOM, progress: 0.68});
+      if (packId) {
+        // The region file replaces the old tile pack and its storage.
+        await OfflineManager.deletePack(packId).catch(() => undefined);
+        packId = null;
+      }
+      useMapStore.getState().patchRegion(region.id, {
+        packId: null,
+        packZoom: undefined,
+        fileVersion: current ? existing?.fileVersion : manifest.version,
+        progress: 0.68,
+      });
       await persistRegionState();
+    } else {
+      packId = await ensureTilePack(region, existing, options?.refresh === true);
     }
     throwIfPaused(stamp);
     try {
@@ -131,7 +117,7 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
         const copy = uiCopy(useSettingsStore.getState().language);
         const fraction = total === 0 ? 1 : done / total;
         useMapStore.getState().patchRegion(region.id, {
-          progress: fraction,
+          progress: 0.68 + fraction * 0.16,
           detail: `${copy.streetTiles} ${done}/${total}`,
         });
       });
@@ -192,6 +178,48 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
   }
 }
 
+/** Fallback while the release has no file for this region: MapLibre tile pack from OpenFreeMap. */
+async function ensureTilePack(
+  region: RegionDefinition,
+  existing: RegionDownload | undefined,
+  refresh: boolean,
+): Promise<string> {
+  if (existing?.packId && !refresh && existing.packZoom === PACK_MAX_ZOOM) {
+    useMapStore.getState().patchRegion(region.id, {progress: 0.68});
+    return existing.packId;
+  }
+  if (existing?.packId) {
+    await OfflineManager.deletePack(existing.packId).catch(() => undefined);
+  }
+  const pack = await OfflineManager.createPack(
+    {
+      mapStyle: VECTOR_STYLE_URL,
+      bounds: [region.west, region.south, region.east, region.north],
+      minZoom: 8,
+      maxZoom: PACK_MAX_ZOOM,
+      metadata: {id: region.id},
+    },
+    (_offlinePack, status) => {
+      const ratio =
+        status.requiredResourceCount > 0
+          ? status.completedResourceCount / status.requiredResourceCount
+          : status.percentage / 100;
+      useMapStore.getState().patchRegion(region.id, {
+        progress: Math.max(0.02, Math.min(0.68, ratio * 0.68)),
+      });
+    },
+    (_offlinePack, error) => {
+      useMapStore.getState().patchRegion(region.id, {
+        status: 'error',
+        error: error.message,
+      });
+    },
+  );
+  useMapStore.getState().patchRegion(region.id, {packId: pack.id, packZoom: PACK_MAX_ZOOM, progress: 0.68});
+  await persistRegionState();
+  return pack.id;
+}
+
 export async function removeRegion(regionId: string): Promise<void> {
   const current = useMapStore.getState().regions[regionId];
   if (current?.packId) {
@@ -201,11 +229,13 @@ export async function removeRegion(regionId: string): Promise<void> {
       logDeveloperError(toAppError(error, 'OFFLINE_MAP_ERROR'));
     }
   }
+  await removeRegionFile(regionId).catch(() => undefined);
   useMapStore.getState().patchRegion(regionId, {
     status: 'idle',
     progress: 0,
     packId: null,
     packZoom: undefined,
+    fileVersion: undefined,
     error: null,
     detail: null,
     updatedAt: null,
@@ -259,6 +289,7 @@ export async function refreshStaleRegions(): Promise<void> {
     return;
   }
   const now = Date.now();
+  const manifest = await loadManifest(true);
   for (const region of REGIONS) {
     const state = useMapStore.getState().regions[region.id];
     if (state?.status !== 'downloaded') {
@@ -269,12 +300,16 @@ export async function refreshStaleRegions(): Promise<void> {
       await persistRegionState();
       continue;
     }
-    const shallowPack = state.packZoom !== PACK_MAX_ZOOM;
-    if (!shallowPack && !regionIsStale(state.updatedAt, now)) {
+    const onFile = state.fileVersion != null;
+    const fileOffered = manifest?.regions[region.id] != null;
+    // A region still on a tile pack moves to the region file, or at least to a z14 pack.
+    const upgrade = !onFile && (fileOffered || state.packZoom !== PACK_MAX_ZOOM);
+    const stale = regionIsStale(state.updatedAt, now) && (!onFile || manifest?.version !== state.fileVersion);
+    if (!upgrade && !stale) {
       continue;
     }
     try {
-      await downloadRegion(region, shallowPack ? undefined : {refresh: true});
+      await downloadRegion(region, upgrade ? undefined : {refresh: true});
     } catch {
       // The saved map stays. The next launch can try again.
     }

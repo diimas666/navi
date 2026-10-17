@@ -42,6 +42,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
   func application(
     _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    if identifier == MapDownloads.sessionIdentifier {
+      MapDownloads.shared.attachBackgroundEvents(completionHandler)
+    } else {
+      completionHandler()
+    }
+  }
+
+  func application(
+    _ application: UIApplication,
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {

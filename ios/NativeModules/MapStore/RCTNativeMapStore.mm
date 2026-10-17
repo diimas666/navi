@@ -33,4 +33,36 @@
   resolve(@([MapStore.shared remove:name]));
 }
 
+- (NSString *)directory {
+  return MapStore.shared.directory.path;
+}
+
+- (void)fileBytes:(NSString *)name
+          resolve:(RCTPromiseResolveBlock)resolve
+           reject:(RCTPromiseRejectBlock)reject {
+  resolve(@([MapStore.shared fileBytes:name]));
+}
+
+- (void)download:(NSString *)url
+            name:(NSString *)name
+         resolve:(RCTPromiseResolveBlock)resolve
+          reject:(RCTPromiseRejectBlock)reject {
+  [MapDownloads.shared start:url
+                        name:name
+                     resolve:^(double bytes) {
+                       resolve(@(bytes));
+                     }
+                      reject:^(NSString *message) {
+                        reject(@"MAP_DOWNLOAD", message, nil);
+                      }];
+}
+
+- (NSNumber *)downloadProgress:(NSString *)name {
+  return @([MapDownloads.shared fraction:name]);
+}
+
+- (void)cancelDownload:(NSString *)name {
+  [MapDownloads.shared cancel:name];
+}
+
 @end
