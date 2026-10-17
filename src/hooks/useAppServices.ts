@@ -18,6 +18,7 @@ import {decidePark, type ParkMemory} from '../services/navigation/parkHold';
 import {distanceToRoute} from '../services/navigation/offRoute';
 import {geometryStartsNear, placeFix} from '../services/navigation/placeFix';
 import {loadLastPlace, rememberPlace} from '../services/navigation/lastPlace';
+import {centerMovedFar, setLoadCenter} from '../services/maps/nearFirst';
 import {planTrip, rebuildIfOffRoute} from '../services/navigation/startTrip';
 import {loadPlaces} from '../services/places/PlacesRepository';
 import {loadSearchHistory} from '../services/search/SearchHistoryRepository';
@@ -86,7 +87,8 @@ export function useAppServices(): void {
       useMapStore.getState().hydrateRegions(regions);
       usePlacesStore.getState().hydrate(places);
       useSearchHistoryStore.getState().hydrate(history);
-      await Promise.all([loadRegionRoads().catch(() => undefined), loadAllHouses().catch(() => undefined)]);
+      setLoadCenter(remembered);
+      await reloadOfflineData();
       syncDrAllowance();
       hydrated.current = true;
       pauseDownloads();
@@ -250,6 +252,10 @@ export function useAppServices(): void {
         session.setLiveFix(liveSnapshot, shown.latitude, shown.longitude, roadName, applied, crossTrackM);
         if (snapshot.hasGps) {
           rememberPlace(shown.latitude, shown.longitude);
+          if (centerMovedFar(shown.latitude, shown.longitude)) {
+            setLoadCenter({latitude: shown.latitude, longitude: shown.longitude});
+            reloadOfflineData().catch(() => undefined);
+          }
         }
         rememberPoint(snapshot, shown.latitude, shown.longitude);
         rememberCalibration(snapshot);
@@ -288,6 +294,20 @@ export function useAppServices(): void {
       sessionSub?.remove();
     };
   }, []);
+}
+
+let offlineReload: Promise<void> | null = null;
+
+/** Loads saved streets and houses nearest the load center first. One reload runs at a time. */
+function reloadOfflineData(): Promise<void> {
+  if (!offlineReload) {
+    offlineReload = Promise.all([loadRegionRoads().catch(() => undefined), loadAllHouses().catch(() => undefined)])
+      .then(() => undefined)
+      .finally(() => {
+        offlineReload = null;
+      });
+  }
+  return offlineReload;
 }
 
 function linkUp(state: {isConnected: boolean | null; isInternetReachable: boolean | null}): boolean | null {

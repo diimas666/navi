@@ -3,7 +3,29 @@ import {bearingDegrees, haversineMeters} from '../../utils/geo';
 import type {IndexedEdge, RoadGraph} from './RoadGraph';
 import {highwayLimitKmh} from '../navigation/speedLimit';
 
-const URBAN_SPEED_MPS = 16;
+/** Typical travel speed per road class, m/s. A* weighs time so trunks win over village shortcuts. */
+const TRAVEL_MPS: Record<string, number> = {
+  motorway: 31,
+  motorway_link: 17,
+  trunk: 25,
+  trunk_link: 14,
+  primary: 19,
+  primary_link: 12,
+  secondary: 16,
+  secondary_link: 11,
+  tertiary: 13,
+  tertiary_link: 10,
+  unclassified: 10,
+  residential: 8,
+  living_street: 4,
+  service: 4,
+};
+const DEFAULT_MPS = 9;
+const FASTEST_MPS = 31;
+
+export function edgeSeconds(edge: {highway: string; lengthM: number}): number {
+  return edge.lengthM / (TRAVEL_MPS[edge.highway] ?? DEFAULT_MPS);
+}
 
 export function planRoute(
   graph: RoadGraph,
@@ -49,7 +71,9 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
   const coordinates: Array<[number, number]> = [];
   const steps: RoutePlan['steps'] = [];
   let distanceM = 0;
+  let durationS = 0;
   path.forEach((edge, index) => {
+    durationS += edgeSeconds(edge);
     const slice = coordinates.length > 0 ? edge.coordinates.slice(1) : edge.coordinates;
     coordinates.push(...slice);
     const previous = steps[steps.length - 1];
@@ -73,7 +97,7 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
   });
   return {
     distanceM,
-    durationS: distanceM / URBAN_SPEED_MPS,
+    durationS,
     steps,
     coordinates,
   };
@@ -108,20 +132,8 @@ export function turnSide(
 }
 
 function driveCost(edge: IndexedEdge, avoid: Set<string>): number {
-  const highway = edge.highway;
-  let factor = 1;
-  if (highway === 'service' || highway === 'living_street') {
-    factor = 3.2;
-  } else if (highway === 'residential' || highway === 'unclassified') {
-    factor = 1.35;
-  } else if (highway === 'tertiary' || highway === 'tertiary_link') {
-    factor = 1.12;
-  }
   const base = edge.id.replace(/:rev$/, '');
-  if (avoid.has(base)) {
-    factor *= 5;
-  }
-  return edge.lengthM * factor;
+  return edgeSeconds(edge) * (avoid.has(base) ? 5 : 1);
 }
 
 function aStar(graph: RoadGraph, startId: string, goalId: string, avoid: Set<string>): IndexedEdge[] | null {
@@ -131,7 +143,7 @@ function aStar(graph: RoadGraph, startId: string, goalId: string, avoid: Set<str
     return null;
   }
   const open = new Heap();
-  open.push(startId, haversineMeters(start.lat, start.lon, goal.lat, goal.lon));
+  open.push(startId, haversineMeters(start.lat, start.lon, goal.lat, goal.lon) / FASTEST_MPS);
   const came = new Map<string, IndexedEdge>();
   const score = new Map<string, number>([[startId, 0]]);
   const seen = new Set<string>();
@@ -153,7 +165,7 @@ function aStar(graph: RoadGraph, startId: string, goalId: string, avoid: Set<str
       came.set(edge.to, edge);
       score.set(edge.to, nextScore);
       const node = graph.node(edge.to);
-      const heuristic = node ? haversineMeters(node.lat, node.lon, goal.lat, goal.lon) : 0;
+      const heuristic = node ? haversineMeters(node.lat, node.lon, goal.lat, goal.lon) / FASTEST_MPS : 0;
       open.push(edge.to, nextScore + heuristic);
     });
   }

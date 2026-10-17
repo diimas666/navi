@@ -2,7 +2,7 @@ import {OfflineManager} from '@maplibre/maplibre-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 
-import {REGIONS, VECTOR_STYLE_URL, type RegionDefinition} from '../../constants/map';
+import {PACK_MAX_ZOOM, REGIONS, VECTOR_STYLE_URL, type RegionDefinition} from '../../constants/map';
 import {regionIsStale} from './regionCoverage';
 import {useMapStore, type RegionDownload} from '../../store/mapStore';
 import {tripText} from '../../i18n/tripCopy';
@@ -80,7 +80,7 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
       }
     }
   }
-  const hasPack = Boolean(existing?.packId) && !options?.refresh;
+  const hasPack = Boolean(existing?.packId) && !options?.refresh && existing?.packZoom === PACK_MAX_ZOOM;
   useMapStore.getState().patchRegion(region.id, {
     status: 'downloading',
     progress: hasPack ? 0.68 : 0.02,
@@ -88,14 +88,21 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
     detail: options?.refresh ? uiCopy(useSettingsStore.getState().language).mapsUpdating : null,
   });
   try {
-    let packId = options?.refresh ? null : existing?.packId ?? null;
+    let packId = hasPack ? existing?.packId ?? null : null;
+    if (!hasPack && existing?.packId && !options?.refresh) {
+      try {
+        await OfflineManager.deletePack(existing.packId);
+      } catch {
+        // The new pack fills the tiles again.
+      }
+    }
     if (!packId) {
       const pack = await OfflineManager.createPack(
         {
           mapStyle: VECTOR_STYLE_URL,
           bounds: [region.west, region.south, region.east, region.north],
           minZoom: 8,
-          maxZoom: 13,
+          maxZoom: PACK_MAX_ZOOM,
           metadata: {id: region.id},
         },
         (_offlinePack, status) => {
@@ -115,7 +122,7 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
         },
       );
       packId = pack.id;
-      useMapStore.getState().patchRegion(region.id, {packId, progress: 0.68});
+      useMapStore.getState().patchRegion(region.id, {packId, packZoom: PACK_MAX_ZOOM, progress: 0.68});
       await persistRegionState();
     }
     throwIfPaused(stamp);
@@ -198,6 +205,7 @@ export async function removeRegion(regionId: string): Promise<void> {
     status: 'idle',
     progress: 0,
     packId: null,
+    packZoom: undefined,
     error: null,
     detail: null,
     updatedAt: null,
@@ -261,11 +269,12 @@ export async function refreshStaleRegions(): Promise<void> {
       await persistRegionState();
       continue;
     }
-    if (!regionIsStale(state.updatedAt, now)) {
+    const shallowPack = state.packZoom !== PACK_MAX_ZOOM;
+    if (!shallowPack && !regionIsStale(state.updatedAt, now)) {
       continue;
     }
     try {
-      await downloadRegion(region, {refresh: true});
+      await downloadRegion(region, shallowPack ? undefined : {refresh: true});
     } catch {
       // The saved map stays. The next launch can try again.
     }

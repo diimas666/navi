@@ -19,15 +19,45 @@ import Foundation
 
   private let lock = NSLock()
   private var previous: Sample?
+  /// Last fix that passed every check. Spoofing replays a self-consistent track,
+  /// so a new fix must stay reachable from here, not only from the previous raw fix.
+  private var anchor: Sample?
+  /// Motion ticks re-evaluate the same fix many times a second. A repeated fix keeps its first verdict.
+  private var lastVerdict: (timestamp: Double, verdict: NSDictionary)?
+  private let maxCarSpeed = 55.0
+  private let anchorSlack = 300.0
   private let earthRadius = 6_378_137.0
 
   @objc public func reset() {
     lock.lock()
     previous = nil
+    anchor = nil
+    lastVerdict = nil
     lock.unlock()
   }
 
   @objc public func evaluate(_ fix: NSDictionary?) -> NSDictionary {
+    let stamp = fix.map { NeivJSON.double($0, "timestamp") }
+    lock.lock()
+    if let stamp, Date().timeIntervalSince1970 * 1000 - stamp > 10_000 {
+      lock.unlock()
+      return result("lost", "stale")
+    }
+    if let stamp, let cached = lastVerdict, cached.timestamp == stamp {
+      lock.unlock()
+      return cached.verdict
+    }
+    lock.unlock()
+    let verdict = judge(fix)
+    if let stamp {
+      lock.lock()
+      lastVerdict = (stamp, verdict)
+      lock.unlock()
+    }
+    return verdict
+  }
+
+  private func judge(_ fix: NSDictionary?) -> NSDictionary {
     guard let fix else {
       return result("lost", "no_fix")
     }
@@ -54,6 +84,7 @@ import Foundation
 
     lock.lock()
     let prior = previous
+    let trusted = anchor
     if prior == nil || sample.timestamp > prior!.timestamp {
       previous = sample
     }
@@ -61,6 +92,15 @@ import Foundation
 
     if sample.accuracy > 120 {
       return result("untrusted", "poor_accuracy")
+    }
+
+    if let trusted, trusted.timestamp < sample.timestamp {
+      let dt = (sample.timestamp - trusted.timestamp) / 1000
+      let distance = haversine(trusted.latitude, trusted.longitude, sample.latitude, sample.longitude)
+      let reach = anchorSlack + trusted.accuracy + sample.accuracy + maxCarSpeed * dt
+      if distance > reach {
+        return result("untrusted", "unreachable_from_trusted")
+      }
     }
 
     if let prior, prior.timestamp < sample.timestamp {
@@ -80,10 +120,19 @@ import Foundation
       }
     }
 
+    remember(sample)
     if sample.accuracy > 65 {
       return result("degraded", "degraded_accuracy")
     }
     return result("trusted", "ok")
+  }
+
+  private func remember(_ sample: Sample) {
+    lock.lock()
+    if anchor == nil || sample.timestamp > anchor!.timestamp {
+      anchor = sample
+    }
+    lock.unlock()
   }
 
   private func result(_ trust: String, _ reason: String) -> NSDictionary {

@@ -33,7 +33,7 @@ export function ManeuverBanner({current, after, thenWord, night = false}: Props)
           <TurnArrow turn={next.turn} night={night} />
           <View style={styles.copy}>
             <Text style={[styles.afterText, {color: muted}]}>
-              {`${thenWord} ${next.title}`.trim()}
+              {`${thenWord} ${lowerFirst(next.title)}`.trim()}
             </Text>
             {next.street ? <Text style={[styles.afterStreet, {color: muted}]}>{next.street}</Text> : null}
           </View>
@@ -146,3 +146,8 @@ const styles = StyleSheet.create({
   arrive: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#149C96', marginTop: 6},
   arriveLarge: {width: 14, height: 14, borderRadius: 7, marginTop: 6},
 });
+
+/** "затем Поверните" reads as two sentences. The cue after "then" starts lowercase. */
+function lowerFirst(text: string): string {
+  return text ? `${text[0].toLowerCase()}${text.slice(1)}` : text;
+}

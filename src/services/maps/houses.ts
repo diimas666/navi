@@ -20,28 +20,42 @@ export type Bounds = {
 };
 
 const MAX_INTERPOLATION_SPAN = 500;
-export const HOUSE_MEMORY_CAP = 30_000;
+export const HOUSE_MEMORY_CAP = 100_000;
 
 const HOUSE_CELL = 0.02;
 
 let houses: HousePoint[] = [];
+let houseKeys = new Set<string>();
 let byStreet: Map<string, HousePoint[]> | null = null;
 let houseCells: Map<string, HousePoint[]> | null = null;
 
 export function replaceHouses(next: HousePoint[]): void {
-  houses = dedupeHouses(next.slice(0, HOUSE_MEMORY_CAP));
-  byStreet = null;
-  houseCells = null;
+  houses = [];
+  houseKeys = new Set();
+  addHouses(next);
 }
 
 export function addHouses(next: HousePoint[]): void {
   if (next.length === 0 || houses.length >= HOUSE_MEMORY_CAP) {
     return;
   }
-  const room = HOUSE_MEMORY_CAP - houses.length;
-  houses = dedupeHouses([...houses, ...next.slice(0, room)]);
+  for (const point of next) {
+    if (houses.length >= HOUSE_MEMORY_CAP) {
+      break;
+    }
+    const key = houseKey(point);
+    if (houseKeys.has(key)) {
+      continue;
+    }
+    houseKeys.add(key);
+    houses.push(point);
+  }
   byStreet = null;
   houseCells = null;
+}
+
+function houseKey(point: HousePoint): string {
+  return `${point.street.toLowerCase()}|${point.house.toLowerCase()}|${point.latitude.toFixed(5)}|${point.longitude.toFixed(5)}`;
 }
 
 export function housesNear(latitude: number, longitude: number, span = 0.02): HousePoint[] {
@@ -391,7 +405,7 @@ export function dedupeHouses(points: HousePoint[]): HousePoint[] {
   const seen = new Set<string>();
   const unique: HousePoint[] = [];
   points.forEach(point => {
-    const key = `${point.street.toLowerCase()}|${point.house.toLowerCase()}|${point.latitude.toFixed(5)}|${point.longitude.toFixed(5)}`;
+    const key = houseKey(point);
     if (seen.has(key)) {
       return;
     }

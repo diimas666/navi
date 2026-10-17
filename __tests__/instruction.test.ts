@@ -61,3 +61,9 @@ test('cue shows a short turn and the full street', () => {
   expect(pair.after?.title).toBe('Направо');
   expect(pair.after?.street).toBe('вул. Олексіївську');
 });
+
+test('a heading instruction leaves only the street', () => {
+  expect(streetFromInstruction('Направляйтесь на юго-восток по Лікарняна вулиця в сторону Пантелеймонівська')).toBe(
+    'Лікарняна вулиця',
+  );
+});

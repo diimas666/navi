@@ -10,6 +10,7 @@ import {
   throwIfPaused,
   trackAbort,
 } from './downloadPause';
+import {nearestTilesFirst} from './nearFirst';
 import {mapLimitVoid, withOverpass} from './overpassGate';
 import {
   addHouses,
@@ -50,28 +51,28 @@ export async function reopenHouseDownload(regionId: string): Promise<void> {
 
 export async function loadAllHouses(): Promise<void> {
   const manifest = await readManifest();
+  const tiles = Object.entries(manifest).flatMap(([regionId, entry]) => entry.tiles.map(id => ({regionId, id})));
   const loaded: HousePoint[] = [];
-  let changed = false;
-  for (const [regionId, entry] of Object.entries(manifest)) {
-    const kept: string[] = [];
-    for (const id of entry.tiles) {
-      const tile = await readTile(regionId, id);
-      if (tile === null) {
-        changed = true;
-        continue;
-      }
-      kept.push(id);
-      if (loaded.length < HOUSE_MEMORY_CAP) {
-        loaded.push(...tile.slice(0, HOUSE_MEMORY_CAP - loaded.length));
-      }
+  const broken = new Set<string>();
+  for (const {regionId, id} of nearestTilesFirst(tiles)) {
+    if (loaded.length >= HOUSE_MEMORY_CAP) {
+      break;
     }
-    if (kept.length !== entry.tiles.length) {
-      entry.tiles = kept;
-      entry.complete = false;
-      changed = true;
+    const tile = await readTile(regionId, id);
+    if (tile === null) {
+      broken.add(`${regionId}/${id}`);
+      continue;
     }
+    loaded.push(...tile.slice(0, HOUSE_MEMORY_CAP - loaded.length));
   }
-  if (changed) {
+  if (broken.size > 0) {
+    for (const [regionId, entry] of Object.entries(manifest)) {
+      const kept = entry.tiles.filter(id => !broken.has(`${regionId}/${id}`));
+      if (kept.length !== entry.tiles.length) {
+        entry.tiles = kept;
+        entry.complete = false;
+      }
+    }
     await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));
   }
   replaceHouses(loaded);

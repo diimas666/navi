@@ -15,6 +15,8 @@ export function loosenInstruction(text: string): string {
 export function streetFromInstruction(text: string): string {
   const loose = loosenInstruction(text);
   const cut = loose
+    .replace(/^(направляйтесь|прямуйте|рухайтеся|двигайтесь|head)\s+(на|to|в)\s+\S+\s+(по|on|toward)\s+/i, '')
+    .replace(/\s+(в сторону|в напрямку|у напрямку|по направлению к|toward)\s+.*$/i, '')
     .replace(/^\d+([.,]\d+)?\s*(км|м)\s*/i, '')
     .replace(/^(через|за)\s+\d+([.,]\d+)?\s*(км|м|метров|метрів)\.?\s*/i, '')
     .replace(/^(продовжуйте|продолжайте|прямуйте|следуйте|їдьте|едьте|рухайтеся|двигайтесь)\s+/i, '')

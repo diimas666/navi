@@ -11,6 +11,8 @@ export type RoadWay = {
   highway: string;
   coordinates: Array<[number, number]>;
   oneway?: boolean;
+  /** OSM node ids aligned with coordinates. Junctions are joined by id, not by rounded position. */
+  nodeIds?: number[];
 };
 
 const rank: Record<string, number> = {
@@ -53,18 +55,24 @@ export function waysToNetwork(ways: RoadWay[], maxSegments = MAX_SEGMENTS): Road
   const nodes = new Map<string, RoadNode>();
   const edges: RoadEdge[] = [];
   const ordered = [...ways].sort((left, right) => (rank[left.highway] ?? 20) - (rank[right.highway] ?? 20));
+  const uses = new Map<number, number>();
+  ordered.forEach(way => {
+    if (way.nodeIds && way.nodeIds.length === way.coordinates.length) {
+      new Set(way.nodeIds).forEach(id => uses.set(id, (uses.get(id) ?? 0) + 1));
+    }
+  });
   let segments = 0;
   for (const way of ordered) {
     if (segments >= maxSegments) {
       break;
     }
-    const coordinates = thin(way.coordinates, 32);
-    for (let index = 1; index < coordinates.length; index += 1) {
+    const points = keptPoints(way, uses, 32);
+    for (let index = 1; index < points.length; index += 1) {
       if (segments >= maxSegments) {
         break;
       }
-      const from = nodeFor(coordinates[index - 1], nodes);
-      const to = nodeFor(coordinates[index], nodes);
+      const from = nodeFor(points[index - 1], nodes);
+      const to = nodeFor(points[index], nodes);
       if (from === to) {
         continue;
       }
@@ -74,7 +82,7 @@ export function waysToNetwork(ways: RoadWay[], maxSegments = MAX_SEGMENTS): Road
         to,
         name: way.name || way.highway,
         highway: way.highway,
-        coordinates: [coordinates[index - 1], coordinates[index]],
+        coordinates: [points[index - 1].coordinate, points[index].coordinate],
         oneway: way.oneway === true,
       });
       segments += 1;
@@ -120,6 +128,7 @@ export function parseOverpass(payload: unknown): RoadWay[] {
       id?: number;
       tags?: Record<string, string>;
       geometry?: Array<{lat?: number; lon?: number}>;
+      nodes?: number[];
     };
     const tags = way.tags ?? {};
     if (way.type !== 'way' || !way.geometry || !tags.highway) {
@@ -128,15 +137,23 @@ export function parseOverpass(payload: unknown): RoadWay[] {
     if (tags.access === 'no' || tags.motor_vehicle === 'no' || tags.motorcar === 'no') {
       return;
     }
-    let coordinates = way.geometry
-      .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon))
-      .map(point => [point.lon as number, point.lat as number] as [number, number]);
+    const aligned = Array.isArray(way.nodes) && way.nodes.length === way.geometry.length;
+    let coordinates: Array<[number, number]> = [];
+    let nodeIds: number[] | undefined = aligned ? [] : undefined;
+    way.geometry.forEach((point, index) => {
+      if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) {
+        return;
+      }
+      coordinates.push([point.lon as number, point.lat as number]);
+      nodeIds?.push((way.nodes as number[])[index]);
+    });
     if (coordinates.length < 2) {
       return;
     }
     const reverse = tags.oneway === '-1';
     if (reverse) {
       coordinates = [...coordinates].reverse();
+      nodeIds = nodeIds ? [...nodeIds].reverse() : undefined;
     }
     ways.push({
       id: `w${way.id ?? ways.length}`,
@@ -144,36 +161,44 @@ export function parseOverpass(payload: unknown): RoadWay[] {
       highway: tags.highway,
       coordinates,
       oneway: reverse || tags.oneway === 'yes' || tags.oneway === '1' || tags.junction === 'roundabout',
+      ...(nodeIds ? {nodeIds} : null),
     });
   });
   return ways;
 }
 
-function nodeFor(coordinate: [number, number], nodes: Map<string, RoadNode>): string {
-  const [lon, lat] = coordinate;
-  const key = `${lat.toFixed(4)}:${lon.toFixed(4)}`;
-  if (!nodes.has(key)) {
-    nodes.set(key, {
-      id: key,
+type KeptPoint = {coordinate: [number, number]; key: string};
+
+function coordinateKey([lon, lat]: [number, number]): string {
+  return `${lat.toFixed(4)}:${lon.toFixed(4)}`;
+}
+
+/** Ends and junctions always stay. Shape points are thinned to keep the graph small. */
+function keptPoints(way: RoadWay, uses: Map<number, number>, limit: number): KeptPoint[] {
+  const ids = way.nodeIds && way.nodeIds.length === way.coordinates.length ? way.nodeIds : null;
+  const step = Math.max(1, Math.ceil(way.coordinates.length / limit));
+  const last = way.coordinates.length - 1;
+  const kept: KeptPoint[] = [];
+  way.coordinates.forEach((coordinate, index) => {
+    const junction = ids ? (uses.get(ids[index]) ?? 0) > 1 : false;
+    if (index !== 0 && index !== last && !junction && index % step !== 0) {
+      return;
+    }
+    kept.push({coordinate, key: ids ? `n${ids[index]}` : coordinateKey(coordinate)});
+  });
+  return kept;
+}
+
+function nodeFor(point: KeptPoint, nodes: Map<string, RoadNode>): string {
+  const [lon, lat] = point.coordinate;
+  if (!nodes.has(point.key)) {
+    nodes.set(point.key, {
+      id: point.key,
       name: '',
-      lat: Number(lat.toFixed(4)),
-      lon: Number(lon.toFixed(4)),
+      lat: Number(lat.toFixed(6)),
+      lon: Number(lon.toFixed(6)),
       kind: 'junction',
     });
   }
-  return key;
-}
-
-function thin(coordinates: Array<[number, number]>, limit: number): Array<[number, number]> {
-  if (coordinates.length <= limit) {
-    return coordinates;
-  }
-  const step = Math.ceil(coordinates.length / limit);
-  const kept = coordinates.filter((_, index) => index % step === 0);
-  const last = coordinates[coordinates.length - 1];
-  const tail = kept[kept.length - 1];
-  if (!tail || tail[0] !== last[0] || tail[1] !== last[1]) {
-    kept.push(last);
-  }
-  return kept;
+  return point.key;
 }

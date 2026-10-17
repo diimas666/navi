@@ -20,10 +20,13 @@ import {
   throwIfPaused,
   trackAbort,
 } from '../maps/downloadPause';
+import {nearestTilesFirst} from '../maps/nearFirst';
 import {mapLimit, withOverpass} from '../maps/overpassGate';
 
 const KEY = 'neiv.region-roads.v1';
-const TILE_KEY = 'neiv.region-roads.v2';
+const TILE_KEY = 'neiv.region-roads.v3';
+/** v2 tiles joined junctions by rounded position. v3 keeps OSM node ids. */
+const LEGACY_TILE_KEY = 'neiv.region-roads.v2';
 const ENDPOINTS = [
   'https://overpass.openstreetmap.fr/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
@@ -65,7 +68,17 @@ export async function reopenStreetDownload(regionId: string): Promise<void> {
   await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
 }
 
+export async function dropLegacyStreetTiles(): Promise<void> {
+  const raw = await AsyncStorage.getItem(LEGACY_TILE_KEY);
+  if (raw == null) {
+    return;
+  }
+  const keys = (await AsyncStorage.getAllKeys()).filter(key => key.startsWith(`${LEGACY_TILE_KEY}.`));
+  await AsyncStorage.removeMany([...keys, LEGACY_TILE_KEY]);
+}
+
 export async function loadRegionRoads(): Promise<void> {
+  await dropLegacyStreetTiles();
   const stored = await readRoads();
   const tiles = await readTileNetworks();
   setRegionNetworks([...Object.values(stored), ...tiles]);
@@ -87,7 +100,7 @@ export async function saveRegionRoads(regionId: string, roads: RoadNetwork | nul
 }
 
 const STREET_TILE_AREA = 0.05;
-const MAX_LOADED_EDGES = 60_000;
+const MAX_LOADED_EDGES = 100_000;
 
 async function downloadStreetTiles(
   region: RegionDefinition,
@@ -254,44 +267,42 @@ async function readRoadManifest(): Promise<RoadManifest> {
 
 async function readTileNetworks(): Promise<RoadNetwork[]> {
   const manifest = await readRoadManifest();
+  const tiles = Object.entries(manifest).flatMap(([regionId, entry]) => entry.tiles.map(id => ({regionId, id})));
   const networks: RoadNetwork[] = [];
+  const broken = new Set<string>();
   let edges = 0;
-  let changed = false;
-  for (const [regionId, entry] of Object.entries(manifest)) {
-    const kept: string[] = [];
-    for (const id of entry.tiles) {
-      const key = streetTileKey(regionId, id);
-      const raw = await AsyncStorage.getItem(key);
-      if (!raw) {
-        continue;
-      }
-      if (jsonTooBig(raw)) {
-        await AsyncStorage.removeItem(key);
-        changed = true;
-        continue;
-      }
-      kept.push(id);
-      if (edges >= MAX_LOADED_EDGES) {
-        continue;
-      }
-      try {
-        const parsed: unknown = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && 'edges' in parsed) {
-          const network = parsed as RoadNetwork;
-          edges += network.edges.length;
-          networks.push(network);
-        }
-      } catch {
-        // A broken tile is skipped. The next download fills it again.
-      }
+  for (const {regionId, id} of nearestTilesFirst(tiles)) {
+    if (edges >= MAX_LOADED_EDGES) {
+      break;
     }
-    if (kept.length !== entry.tiles.length) {
-      entry.tiles = kept;
-      entry.complete = false;
-      changed = true;
+    const key = streetTileKey(regionId, id);
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw || jsonTooBig(raw)) {
+      if (raw) {
+        await AsyncStorage.removeItem(key);
+      }
+      broken.add(`${regionId}/${id}`);
+      continue;
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && 'edges' in parsed) {
+        const network = parsed as RoadNetwork;
+        edges += network.edges.length;
+        networks.push(network);
+      }
+    } catch {
+      // A broken tile is skipped. The next download fills it again.
     }
   }
-  if (changed) {
+  if (broken.size > 0) {
+    for (const [regionId, entry] of Object.entries(manifest)) {
+      const kept = entry.tiles.filter(id => !broken.has(`${regionId}/${id}`));
+      if (kept.length !== entry.tiles.length) {
+        entry.tiles = kept;
+        entry.complete = false;
+      }
+    }
     await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
   }
   return networks;
@@ -306,7 +317,7 @@ async function forgetStreetTiles(regionId: string): Promise<void> {
 }
 
 function streetTileKey(regionId: string, id: string): string {
-  return `neiv.region-roads.v2.${regionId}.${id}`;
+  return `${TILE_KEY}.${regionId}.${id}`;
 }
 
 async function readRoads(): Promise<Record<string, RoadNetwork>> {

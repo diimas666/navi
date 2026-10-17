@@ -8,6 +8,7 @@ export type RegionDownload = {
   error: string | null;
   detail: string | null;
   updatedAt: number | null;
+  packZoom?: number;
 };
 
 type MapState = {

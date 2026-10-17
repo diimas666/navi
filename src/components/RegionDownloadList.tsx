@@ -1,7 +1,7 @@
 import {useState} from 'react';
 import {FlatList, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 
-import {REGIONS} from '../constants/map';
+import {PACK_MAX_ZOOM, REGIONS} from '../constants/map';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {toAppError} from '../services/errors/AppError';
 import {downloadRegion, removeRegion} from '../services/maps/OfflineMapService';
@@ -63,7 +63,7 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
         const downloaded = state?.status === 'downloaded';
         const downloading = state?.status === 'downloading';
         const needed = wanted.has(item.id) && !downloaded;
-        const stale = downloaded && regionIsStale(state?.updatedAt);
+        const stale = downloaded && (regionIsStale(state?.updatedAt) || state?.packZoom !== PACK_MAX_ZOOM);
         const progress = downloading ? Math.max(0.02, Math.min(1, state?.progress ?? 0)) : downloaded ? 1 : 0;
         const percent = Math.round(progress * 100);
         const fill = {

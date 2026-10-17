@@ -3,6 +3,9 @@ import type {StyleSpecification} from '@maplibre/maplibre-gl-style-spec';
 export const VECTOR_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 export const DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
+/** OpenMapTiles keeps house numbers, service roads and full buildings only at z14. */
+export const PACK_MAX_ZOOM = 14;
+
 export const LOCAL_MAP_STYLE: StyleSpecification = {
   version: 8,
   name: 'neiv-soft',

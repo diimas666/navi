@@ -586,9 +586,10 @@ export const NaviMap = memo(function NaviMap({
             'text-field': ['to-string', ['coalesce', ['get', 'housenumber'], ['get', 'name']]],
             'text-font': MAP_FONT_REGULAR,
             'text-size': ['interpolate', ['linear'], ['zoom'], 15, 11, 17, 13, 19, 16],
-            'text-padding': 1,
-            'text-allow-overlap': true,
-            'text-ignore-placement': true,
+            'text-padding': 2,
+            // Saved addresses place first. A tile number near one is the same house and stays hidden.
+            'text-allow-overlap': false,
+            'text-ignore-placement': false,
           }}
           paint={{
             'text-color': mapMode === 'dark' ? '#F0ECF8' : '#3A3348',
@@ -699,9 +700,9 @@ export const NaviMap = memo(function NaviMap({
                 'text-font': MAP_FONT_REGULAR,
                 'text-size': 13,
                 'text-allow-overlap': true,
-                'text-ignore-placement': true,
+                'text-ignore-placement': false,
                 'text-optional': false,
-                'text-padding': 1,
+                'text-padding': 2,
               }}
               paint={{
                 'text-color': mapMode === 'dark' ? '#F4F0FF' : '#2A2438',

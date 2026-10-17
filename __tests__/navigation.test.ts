@@ -5,6 +5,7 @@ import {guideRoute} from '../src/services/navigation/startTrip';
 import {useSessionStore} from '../src/store/sessionStore';
 import {RoadGraph, bundledGraph} from '../src/services/roads/RoadGraph';
 import {searchPlaces} from '../src/services/maps/Geocoder';
+import {waysToNetwork} from '../src/services/roads/RegionGraph';
 
 test('a fix outside the map does not snap to a distant city', () => {
   expect(bundledGraph.nearestNode(37.78, -122.42)).toBeNull();
@@ -154,4 +155,43 @@ test('haversine is symmetric', () => {
   const forward = haversineMeters(50.45, 30.52, 46.48, 30.72);
   const backward = haversineMeters(46.48, 30.72, 50.45, 30.52);
   expect(Math.abs(forward - backward)).toBeLessThan(1);
+});
+
+test('a slightly longer trunk beats a village shortcut', () => {
+  const edge = (id: string, from: string, to: string, highway: string, coordinates: Array<[number, number]>) => ({
+    id,
+    from,
+    to,
+    name: id,
+    highway,
+    coordinates,
+  });
+  const graph = new RoadGraph({
+    nodes: [junction('a', 50, 30), junction('v', 50.05, 30), junction('t', 50.05, 30.02), junction('b', 50.1, 30)],
+    edges: [
+      edge('village-1', 'a', 'v', 'residential', [[30, 50], [30, 50.05]]),
+      edge('village-2', 'v', 'b', 'residential', [[30, 50.05], [30, 50.1]]),
+      edge('trunk-1', 'a', 't', 'trunk', [[30, 50], [30.02, 50.05]]),
+      edge('trunk-2', 't', 'b', 'trunk', [[30.02, 50.05], [30, 50.1]]),
+    ],
+  });
+  const route = planRoute(graph, 50, 30, 50.1, 30);
+  expect(route?.steps.map(step => step.name)).toEqual(['trunk-1', 'trunk-2']);
+  expect(route?.durationS).toBeLessThan(route!.distanceM / 8);
+});
+
+test('carriageways 5 m apart stay separate while a shared OSM node joins streets', () => {
+  const long = Array.from({length: 100}, (_, i) => [30 + i * 0.0001, 50.001] as [number, number]);
+  const network = waysToNetwork([
+    {id: 'w1', name: 'Північна', highway: 'trunk', oneway: true, coordinates: [[30, 50], [30.002, 50]], nodeIds: [1, 2]},
+    {id: 'w2', name: 'Південна', highway: 'trunk', oneway: true, coordinates: [[30.002, 50.00004], [30, 50.00004]], nodeIds: [3, 4]},
+    {id: 'w3', name: 'Довга', highway: 'residential', coordinates: long, nodeIds: long.map((_, i) => 1000 + i)},
+    {id: 'w4', name: 'Бічна', highway: 'residential', coordinates: [long[40], [30.004, 50.002]], nodeIds: [1040, 9]},
+  ]);
+  const graph = new RoadGraph(network);
+  expect(graph.neighbors('n1040').map(edge => edge.name)).toContain('Бічна');
+  expect(graph.neighbors('n1040').map(edge => edge.name)).toContain('Довга');
+  expect(graph.nodes.filter(node => node.id.startsWith('n10')).length).toBeLessThan(40);
+  expect(graph.neighbors('n2')).toHaveLength(0);
+  expect(graph.neighbors('n3').map(edge => edge.name)).toEqual(['Південна']);
 });

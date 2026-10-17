@@ -20,6 +20,7 @@ import NativeTripSession from '../native/NativeTripSession';
 import {confirmTrip, startTripTo} from '../services/navigation/startTrip';
 import {saveSettings, selectPersisted} from '../services/settings/SettingsRepository';
 import {lineOffsetM, nextCues, progressAlong} from '../services/navigation/maneuver';
+import {streetFromInstruction} from '../services/navigation/instruction';
 import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue';
 import {speedLimitKmh} from '../services/navigation/speedLimit';
 import {isNightAt} from '../services/maps/sun';
@@ -811,7 +812,7 @@ const styles = StyleSheet.create({
 function roadSummary(route: RoutePlan, generic: string): string {
   const names: string[] = [];
   for (const step of route.steps) {
-    const name = step.name.trim();
+    const name = streetFromInstruction(step.name).trim();
     if (!name || name === generic || names[names.length - 1] === name) {
       continue;
     }
