@@ -3,6 +3,7 @@ import {haversineMeters, projectOntoSegment} from '../../utils/geo';
 import {housesNear} from '../maps/houses';
 import {parseMaxspeed} from '../roads/maxspeed';
 import {routingGraph} from '../roads/RegionGraph';
+import {bundledGraph} from '../roads/RoadGraph';
 
 /** Ukraine defaults when OSM maxspeed is missing. Safer urban numbers over highway guesses. */
 export function highwayLimitKmh(highway: string): number {
@@ -53,8 +54,15 @@ export function speedLimitKmh(
   return guess > URBAN_KMH && inSettlement(latitude, longitude) ? URBAN_KMH : guess;
 }
 
-/** Dense addresses or several residential streets around the car mean a town or village. */
+/** Regional centres from the bundled graph. Its trunk corridors start right at the city centre. */
+const CITY_CENTRES = bundledGraph.nodes.filter(node => node.kind === 'city');
+const CITY_RADIUS_M = 7000;
+
+/** A regional centre, dense addresses or several residential streets around the car mean a town. */
 export function inSettlement(latitude: number, longitude: number): boolean {
+  if (CITY_CENTRES.some(city => haversineMeters(latitude, longitude, city.lat, city.lon) < CITY_RADIUS_M)) {
+    return true;
+  }
   if (housesNear(latitude, longitude, 0.003).length >= 10) {
     return true;
   }
