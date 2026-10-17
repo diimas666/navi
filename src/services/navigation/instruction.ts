@@ -26,7 +26,39 @@ export function streetFromInstruction(text: string): string {
     .replace(/^на\s+/i, '')
     .replace(/^[·•\-–]\s*/, '')
     .trim();
-  return cut || loose;
+  return shortStreet(cut || loose);
+}
+
+/**
+ * One line for the driver: no road-sign remarks in brackets, no Latin twin after a slash,
+ * no "рух по" lead-in. "рух по вулиця Велика Васильківська (знаки …)" → "вулиця Велика Васильківська".
+ */
+export function shortStreet(text: string): string {
+  let cut = text;
+  while (/\([^()]*\)/.test(cut)) {
+    cut = cut.replace(/\s*\([^()]*\)/g, '');
+  }
+  cut = cut
+    .replace(/\s*\(.*$/, '')
+    .replace(/^(рух|движение|їдьте|едьте)\s+(по|на)\s+/i, '')
+    .split(/\s*\/\s*/)[0]
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cut || text.trim();
+}
+
+const STREET_WORDS: Array<[RegExp, string]> = [
+  [/(^|\s)(вулиця|улица)(?=\s|$)/i, '$1вул.'],
+  [/(^|\s)проспект(?=\s|$)/i, '$1просп.'],
+  [/(^|\s)(провулок|переулок)(?=\s|$)/i, '$1пров.'],
+  [/(^|\s)бульвар(?=\s|$)/i, '$1бульв.'],
+  [/(^|\s)(площа|площадь)(?=\s|$)/i, '$1пл.'],
+  [/(^|\s)(набережна|набережная)(?=\s|$)/i, '$1наб.'],
+];
+
+/** The banner has one line. Street kind words shrink to sign abbreviations. Speech keeps full words. */
+export function abbreviateStreet(name: string): string {
+  return STREET_WORDS.reduce((text, [pattern, short]) => text.replace(pattern, short), name);
 }
 
 export function modifierFromInstruction(

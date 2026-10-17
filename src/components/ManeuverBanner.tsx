@@ -1,7 +1,7 @@
 import {StyleSheet, Text, View} from 'react-native';
 
 import type {LaneHint} from '../models/domain';
-import {formatDriveMeters} from '../services/navigation/instruction';
+import {abbreviateStreet, formatDriveMeters} from '../services/navigation/instruction';
 import type {ManeuverCue, ManeuverTurn} from '../services/navigation/maneuver';
 
 type Props = {
@@ -11,32 +11,36 @@ type Props = {
   night?: boolean;
 };
 
+/** Compact card: arrow, distance and one street line. The next turn is one short line below. */
 export function ManeuverBanner({current, after, thenWord, night = false}: Props) {
   const ink = night ? '#F4F0FF' : '#1C1430';
   const muted = night ? '#B8B0C8' : '#6E657F';
   const next = after && after.turn !== 'arrive' ? after : null;
+  const line = current.street ? abbreviateStreet(current.street) : current.title;
+  const nextLine = next ? (next.street ? abbreviateStreet(next.street) : lowerFirst(next.title)) : '';
   return (
     <View style={[styles.card, night ? styles.cardNight : null]}>
       {current.lanes.length > 1 ? <LaneRow lanes={current.lanes} night={night} /> : null}
       <View style={styles.row}>
-        <TurnArrow turn={current.turn} large night={night} />
-        <Text style={[styles.meters, {color: ink}]}>{formatDriveMeters(current.meters)}</Text>
+        <View style={[styles.badge, night ? styles.badgeNight : null]}>
+          <TurnArrow turn={current.turn} size="xl" color="#FFFFFF" />
+        </View>
         <View style={styles.copy}>
-          <Text style={[styles.title, {color: ink}]}>{current.title}</Text>
-          {current.street ? (
-            <Text style={[styles.street, {color: muted}]}>{current.street}</Text>
+          <Text style={[styles.meters, {color: ink}]}>{formatDriveMeters(current.meters)}</Text>
+          {line ? (
+            <Text style={[styles.street, {color: muted}]} numberOfLines={1}>
+              {line}
+            </Text>
           ) : null}
         </View>
       </View>
       {next ? (
-        <View style={styles.after}>
+        <View style={[styles.after, night ? styles.afterNight : null]}>
+          <Text style={[styles.afterText, {color: muted}]}>{thenWord}</Text>
           <TurnArrow turn={next.turn} night={night} />
-          <View style={styles.copy}>
-            <Text style={[styles.afterText, {color: muted}]}>
-              {`${thenWord} ${lowerFirst(next.title)}`.trim()}
-            </Text>
-            {next.street ? <Text style={[styles.afterStreet, {color: muted}]}>{next.street}</Text> : null}
-          </View>
+          <Text style={[styles.afterText, styles.afterStreet, {color: muted}]} numberOfLines={1}>
+            {nextLine}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -56,16 +60,32 @@ function arrowRotation(turn: ManeuverTurn): string {
   return '0deg';
 }
 
-function TurnArrow({turn, large = false, night = false}: {turn: ManeuverTurn; large?: boolean; night?: boolean}) {
+type ArrowSize = 'small' | 'large' | 'xl';
+
+function TurnArrow({
+  turn,
+  size = 'small',
+  night = false,
+  color,
+}: {
+  turn: ManeuverTurn;
+  size?: ArrowSize;
+  night?: boolean;
+  color?: string;
+}) {
   const rotation = arrowRotation(turn);
-  const mark = night ? '#5EE0D6' : '#149C96';
+  const mark = color ?? (night ? '#5EE0D6' : '#149C96');
+  const box = size === 'xl' ? styles.arrowBoxXl : size === 'large' ? styles.arrowBoxLarge : null;
+  const head = size === 'xl' ? styles.arrowHeadXl : size === 'large' ? styles.arrowHeadLarge : null;
+  const shaft = size === 'xl' ? styles.arrowShaftXl : size === 'large' ? styles.arrowShaftLarge : null;
   if (turn === 'arrive') {
-    return <View style={[styles.arrive, large ? styles.arriveLarge : null, {backgroundColor: mark}]} />;
+    const dot = size === 'small' ? null : size === 'xl' ? styles.arriveXl : styles.arriveLarge;
+    return <View style={[styles.arrive, dot, {backgroundColor: mark}]} />;
   }
   return (
-    <View style={[styles.arrowBox, large ? styles.arrowBoxLarge : null, {transform: [{rotate: rotation}]}]}>
-      <View style={[styles.arrowHead, large ? styles.arrowHeadLarge : null, {borderBottomColor: mark}]} />
-      <View style={[styles.arrowShaft, large ? styles.arrowShaftLarge : null, {backgroundColor: mark}]} />
+    <View style={[styles.arrowBox, box, {transform: [{rotate: rotation}]}]}>
+      <View style={[styles.arrowHead, head, {borderBottomColor: mark}]} />
+      <View style={[styles.arrowShaft, shaft, {backgroundColor: mark}]} />
     </View>
   );
 }
@@ -93,27 +113,45 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 54,
     left: 12,
-    right: 88,
+    maxWidth: '74%',
     zIndex: 4,
-    borderRadius: 22,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+    paddingLeft: 10,
+    paddingRight: 16,
     paddingVertical: 10,
-    gap: 6,
+    gap: 8,
     shadowColor: '#1C1430',
     shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: {width: 0, height: 4},
   },
   cardNight: {backgroundColor: '#1C1826', shadowOpacity: 0.28},
-  row: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
-  copy: {flex: 1, gap: 2, minWidth: 0},
-  meters: {color: '#1C1430', fontSize: 22, fontWeight: '800', paddingTop: 1},
-  title: {color: '#1C1430', fontSize: 17, fontWeight: '800'},
+  row: {flexDirection: 'row', alignItems: 'center', gap: 12},
+  badge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#149C96',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeNight: {backgroundColor: '#1F8F89'},
+  copy: {flexShrink: 1, minWidth: 0},
+  meters: {color: '#1C1430', fontSize: 26, fontWeight: '800', lineHeight: 30},
   street: {color: '#6E657F', fontSize: 15, fontWeight: '700'},
-  after: {flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingLeft: 4},
+  after: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 8,
+    paddingLeft: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(28,20,48,0.12)',
+  },
+  afterNight: {borderTopColor: 'rgba(244,240,255,0.14)'},
   afterText: {color: '#6E657F', fontSize: 13, fontWeight: '600'},
-  afterStreet: {color: '#6E657F', fontSize: 13, fontWeight: '700'},
+  afterStreet: {flexShrink: 1, fontWeight: '700'},
   lanes: {flexDirection: 'row', gap: 4},
   lane: {
     width: 28,
@@ -143,6 +181,10 @@ const styles = StyleSheet.create({
   arrowHeadLarge: {borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 9},
   arrowShaft: {width: 3, height: 6, borderRadius: 1, backgroundColor: '#149C96', marginTop: -1},
   arrowShaftLarge: {width: 4, height: 8},
+  arrowBoxXl: {width: 28, height: 28, marginTop: 0},
+  arrowHeadXl: {borderLeftWidth: 11, borderRightWidth: 11, borderBottomWidth: 13},
+  arrowShaftXl: {width: 7, height: 13, borderRadius: 2},
+  arriveXl: {width: 18, height: 18, borderRadius: 9, marginTop: 0},
   arrive: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#149C96', marginTop: 6},
   arriveLarge: {width: 14, height: 14, borderRadius: 7, marginTop: 6},
 });

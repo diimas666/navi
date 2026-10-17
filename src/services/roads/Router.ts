@@ -90,7 +90,7 @@ function pathToPlan(path: IndexedEdge[]): RoutePlan {
         longitude,
         kind: steps.length === 0 ? 'depart' : 'turn',
         modifier: prior ? turnSide(prior.coordinates, edge.coordinates) : undefined,
-        speedKmh: highwayLimitKmh(edge.highway),
+        speedKmh: edge.maxspeed ?? highwayLimitKmh(edge.highway),
       });
     }
     distanceM += edge.lengthM;

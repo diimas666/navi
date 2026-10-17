@@ -22,6 +22,8 @@ export type RoadEdge = {
   highway: string;
   coordinates: Array<[number, number]>;
   oneway?: boolean;
+  /** Posted limit from OSM `maxspeed`, km/h. */
+  maxspeed?: number;
 };
 
 export type RoadNetwork = {

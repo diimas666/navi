@@ -3,6 +3,7 @@ import {
   loosenInstruction,
   modifierFromInstruction,
   streetFromInstruction,
+  abbreviateStreet,
 } from '../src/services/navigation/instruction';
 import {nextCues} from '../src/services/navigation/maneuver';
 import type {RoutePlan} from '../src/models/domain';
@@ -66,4 +67,16 @@ test('a heading instruction leaves only the street', () => {
   expect(streetFromInstruction('Направляйтесь на юго-восток по Лікарняна вулиця в сторону Пантелеймонівська')).toBe(
     'Лікарняна вулиця',
   );
+});
+
+test('road-sign remarks and Latin twins never reach the banner', () => {
+  expect(
+    streetFromInstruction(
+      "рух по вулиця Велика Васильківська (знаки вулиця ЖИЛЯНСЬКА/ ZHYLYANS'KA Str/ вулиця ШОТА РУСТАВЕЛІ/SHOTA RUSTAVELI Str/ салон CERAMIC FASHION)",
+    ),
+  ).toBe('вулиця Велика Васильківська');
+  expect(streetFromInstruction('Бессарабський проїзд')).toBe('Бессарабський проїзд');
+  expect(streetFromInstruction('проспект Перемоги/Peremohy Ave')).toBe('проспект Перемоги');
+  expect(abbreviateStreet('Михайлівська вулиця')).toBe('Михайлівська вул.');
+  expect(abbreviateStreet('проспект Перемоги')).toBe('просп. Перемоги');
 });

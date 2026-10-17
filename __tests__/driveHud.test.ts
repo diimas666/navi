@@ -142,3 +142,35 @@ test('Odesa in January night is dark, noon in June is not', () => {
   expect(isNightAt(46.48, 30.73, new Date('2026-01-15T22:00:00Z'))).toBe(true);
   expect(isNightAt(46.48, 30.73, new Date('2026-06-15T10:00:00Z'))).toBe(false);
 });
+
+describe('posted limits', () => {
+  const {setRegionNetworks, waysToNetwork} = require('../src/services/roads/RegionGraph');
+  const street = (id: string, highway: string, lat: number, extra: object = {}) => ({
+    id,
+    name: id,
+    highway,
+    coordinates: [
+      [30.5, lat],
+      [30.502, lat],
+    ],
+    ...extra,
+  });
+  afterEach(() => setRegionNetworks([]));
+
+  test('OSM maxspeed is the sign on the road', () => {
+    setRegionNetworks([waysToNetwork([street('Траса', 'trunk', 49, {maxspeed: 70})])]);
+    expect(speedLimitKmh(49, 30.501)).toBe(70);
+    expect(parseMaxspeed('UA:urban')).toBe(50);
+  });
+
+  test('a trunk inside a town without a sign is 50', () => {
+    const blocks = Array.from({length: 8}, (_, index) => street(`Жила ${index}`, 'residential', 50.0005 + index * 0.0003));
+    setRegionNetworks([waysToNetwork([street('Хрещатик', 'trunk', 50), ...blocks])]);
+    expect(speedLimitKmh(50, 30.501)).toBe(50);
+  });
+
+  test('the same trunk in open country keeps its class default', () => {
+    setRegionNetworks([waysToNetwork([street('Траса', 'trunk', 48)])]);
+    expect(speedLimitKmh(48, 30.501)).toBe(110);
+  });
+});

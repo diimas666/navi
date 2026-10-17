@@ -2,6 +2,7 @@ import network from '../../assets/roads/network.json';
 import type {RegionDefinition} from '../../constants/map';
 import type {RoadEdge, RoadNetwork, RoadNode} from '../../models/domain';
 import {bundledGraph, RoadGraph} from './RoadGraph';
+import {parseMaxspeed} from './maxspeed';
 
 const MAX_SEGMENTS = 250_000;
 
@@ -13,6 +14,7 @@ export type RoadWay = {
   oneway?: boolean;
   /** OSM node ids aligned with coordinates. Junctions are joined by id, not by rounded position. */
   nodeIds?: number[];
+  maxspeed?: number;
 };
 
 const rank: Record<string, number> = {
@@ -84,6 +86,7 @@ export function waysToNetwork(ways: RoadWay[], maxSegments = MAX_SEGMENTS): Road
         highway: way.highway,
         coordinates: [points[index - 1].coordinate, points[index].coordinate],
         oneway: way.oneway === true,
+        ...(way.maxspeed != null ? {maxspeed: way.maxspeed} : null),
       });
       segments += 1;
     }
@@ -162,6 +165,7 @@ export function parseOverpass(payload: unknown): RoadWay[] {
       coordinates,
       oneway: reverse || tags.oneway === 'yes' || tags.oneway === '1' || tags.junction === 'roundabout',
       ...(nodeIds ? {nodeIds} : null),
+      ...(parseMaxspeed(tags.maxspeed) != null ? {maxspeed: parseMaxspeed(tags.maxspeed) as number} : null),
     });
   });
   return ways;

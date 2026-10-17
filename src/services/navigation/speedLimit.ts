@@ -1,5 +1,7 @@
 import type {RoutePlan} from '../../models/domain';
 import {haversineMeters, projectOntoSegment} from '../../utils/geo';
+import {housesNear} from '../maps/houses';
+import {parseMaxspeed} from '../roads/maxspeed';
 import {routingGraph} from '../roads/RegionGraph';
 
 /** Ukraine defaults when OSM maxspeed is missing. Safer urban numbers over highway guesses. */
@@ -27,35 +29,48 @@ export function highwayLimitKmh(highway: string): number {
   return 50;
 }
 
-export function parseMaxspeed(value: string | number | null | undefined): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 200) {
-    return Math.round(value);
-  }
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const match = value.match(/(\d{2,3})/);
-  if (!match) {
-    return null;
-  }
-  const kmh = Number(match[1]);
-  return kmh > 0 && kmh < 200 ? kmh : null;
-}
+export {parseMaxspeed};
 
+const URBAN_KMH = 50;
+
+/**
+ * Posted limit from OSM when the road has one. Otherwise a class default, never above 50 km/h
+ * inside a town: Ukrainian rules set 50 in settlements unless a sign says otherwise.
+ */
 export function speedLimitKmh(
   latitude: number,
   longitude: number,
   route?: RoutePlan | null,
 ): number | null {
-  const fromStep = stepLimit(route, latitude, longitude);
-  if (fromStep != null) {
-    return fromStep;
+  const edge = nearestEdge(latitude, longitude);
+  if (edge?.maxspeed != null) {
+    return edge.maxspeed;
   }
-  const edge = nearestHighway(latitude, longitude);
-  if (!edge) {
+  const guess = stepLimit(route, latitude, longitude) ?? (edge ? highwayLimitKmh(edge.highway) : null);
+  if (guess == null) {
     return null;
   }
-  return highwayLimitKmh(edge);
+  return guess > URBAN_KMH && inSettlement(latitude, longitude) ? URBAN_KMH : guess;
+}
+
+/** Dense addresses or several residential streets around the car mean a town or village. */
+export function inSettlement(latitude: number, longitude: number): boolean {
+  if (housesNear(latitude, longitude, 0.003).length >= 10) {
+    return true;
+  }
+  let residential = 0;
+  for (const edge of routingGraph().edgesNear(latitude, longitude)) {
+    if (edge.highway !== 'residential' && edge.highway !== 'living_street') {
+      continue;
+    }
+    if (distanceToEdge(edge.coordinates, latitude, longitude) < 300) {
+      residential += 1;
+      if (residential >= 6) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function stepLimit(route: RoutePlan | null | undefined, latitude: number, longitude: number): number | null {
@@ -79,22 +94,27 @@ function stepLimit(route: RoutePlan | null | undefined, latitude: number, longit
   return best < 240 ? hit : null;
 }
 
-function nearestHighway(latitude: number, longitude: number): string | null {
+function nearestEdge(latitude: number, longitude: number): {highway: string; maxspeed?: number} | null {
   let best = Number.POSITIVE_INFINITY;
-  let highway: string | null = null;
+  let found: {highway: string; maxspeed?: number} | null = null;
   routingGraph()
     .edgesNear(latitude, longitude)
     .forEach(edge => {
-      const line = edge.coordinates;
-      for (let index = 1; index < line.length; index += 1) {
-        const [startLon, startLat] = line[index - 1];
-        const [endLon, endLat] = line[index];
-        const point = projectOntoSegment(latitude, longitude, startLat, startLon, endLat, endLon);
-        if (point.distanceM < best) {
-          best = point.distanceM;
-          highway = edge.highway;
-        }
+      const away = distanceToEdge(edge.coordinates, latitude, longitude);
+      if (away < best) {
+        best = away;
+        found = edge;
       }
     });
-  return best < 40 ? highway : null;
+  return best < 40 ? found : null;
+}
+
+function distanceToEdge(line: Array<[number, number]>, latitude: number, longitude: number): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < line.length; index += 1) {
+    const [startLon, startLat] = line[index - 1];
+    const [endLon, endLat] = line[index];
+    best = Math.min(best, projectOntoSegment(latitude, longitude, startLat, startLon, endLat, endLon).distanceM);
+  }
+  return best;
 }
