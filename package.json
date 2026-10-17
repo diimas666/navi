@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
+    "test:native": "sh scripts/test-native.sh",
     "typecheck": "tsc --noEmit"
   },
   "codegenConfig": {

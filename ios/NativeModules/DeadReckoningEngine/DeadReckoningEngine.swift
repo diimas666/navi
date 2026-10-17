@@ -178,13 +178,18 @@ import Foundation
     }
 
     let gap = haversine(latitude, longitude, lat, lon)
-    if paused || gap <= 70 {
+    // While following GPS a 70 m step is one fix at speed. Coming back from DR it is a visible jump.
+    let following = source == "gps"
+    if paused || gap <= 15 || (following && gap <= 70) {
       latitude = lat
       longitude = lon
       source = "gps"
     } else {
+      // After a long outage DR can be hundreds of metres off while the car keeps moving.
+      // A fixed 40 m/s chase then lags for many seconds, so the pull grows with the gap.
       let catchup = 40.0
-      let budget = catchup * min(max(dt, 0.05), 1)
+      let step = min(max(dt, 0.05), 1)
+      let budget = max(catchup * step, gap * min(1, step / 1.5))
       moveToward(lat, lon, budget)
       let left = haversine(latitude, longitude, lat, lon)
       if left < 4 {
