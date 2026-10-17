@@ -79,3 +79,6 @@ src/constants/googleMapsKey.ts
 
 tmp/
 
+
+# Python
+__pycache__/
