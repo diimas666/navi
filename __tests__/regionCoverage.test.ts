@@ -90,3 +90,15 @@ test('a downloaded Odesa map does not ask for Mykolaiv on a city trip', () => {
     ]),
   ).toEqual([]);
 });
+
+test('region list puts the needed and current region first and filters by any spelling', () => {
+  const {orderRegions} = require('../src/services/maps/regionCoverage');
+  const {REGIONS} = require('../src/constants/map');
+  const ids = (list: Array<{id: string}>) => list.map(item => item.id);
+  const base = {need: new Set<string>(), here: 'odesa', downloaded: new Set(['lviv']), filter: ''};
+  expect(ids(orderRegions(REGIONS, base)).slice(0, 2)).toEqual(['odesa', 'lviv']);
+  expect(ids(orderRegions(REGIONS, {...base, need: new Set(['kharkiv'])}))[0]).toBe('kharkiv');
+  expect(ids(orderRegions(REGIONS, {...base, filter: 'одесс'}))).toEqual(['odesa']);
+  expect(ids(orderRegions(REGIONS, {...base, filter: 'киев'}))).toEqual(['kyiv', 'kyiv-oblast']);
+  expect(ids(orderRegions(REGIONS, {...base, filter: 'ивано'}))).toEqual(['ivano']);
+});

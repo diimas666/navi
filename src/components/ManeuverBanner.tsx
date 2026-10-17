@@ -74,7 +74,7 @@ function TurnArrow({
   color?: string;
 }) {
   const rotation = arrowRotation(turn);
-  const mark = color ?? (night ? '#5EE0D6' : '#149C96');
+  const mark = color ?? (night ? '#B7A4F5' : '#6B4EE0');
   const box = size === 'xl' ? styles.arrowBoxXl : size === 'large' ? styles.arrowBoxLarge : null;
   const head = size === 'xl' ? styles.arrowHeadXl : size === 'large' ? styles.arrowHeadLarge : null;
   const shaft = size === 'xl' ? styles.arrowShaftXl : size === 'large' ? styles.arrowShaftLarge : null;
@@ -132,11 +132,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#149C96',
+    backgroundColor: '#6B4EE0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeNight: {backgroundColor: '#1F8F89'},
+  badgeNight: {backgroundColor: '#7A5FE8'},
   copy: {flexShrink: 1, minWidth: 0},
   meters: {color: '#1C1430', fontSize: 26, fontWeight: '800', lineHeight: 30},
   street: {color: '#6E657F', fontSize: 15, fontWeight: '700'},
@@ -164,8 +164,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   laneNight: {backgroundColor: '#2A2438'},
-  laneOn: {borderColor: '#149C96', backgroundColor: '#E7F7F5'},
-  laneOnNight: {borderColor: '#5EE0D6', backgroundColor: '#24343A'},
+  laneOn: {borderColor: '#6B4EE0', backgroundColor: '#EEE9FC'},
+  laneOnNight: {borderColor: '#B7A4F5', backgroundColor: '#2E2744'},
   arrowBox: {width: 16, height: 16, alignItems: 'center', marginTop: 3},
   arrowBoxLarge: {width: 22, height: 22, marginTop: 2},
   arrowHead: {
@@ -176,16 +176,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 7,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#149C96',
+    borderBottomColor: '#6B4EE0',
   },
   arrowHeadLarge: {borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 9},
-  arrowShaft: {width: 3, height: 6, borderRadius: 1, backgroundColor: '#149C96', marginTop: -1},
+  arrowShaft: {width: 3, height: 6, borderRadius: 1, backgroundColor: '#6B4EE0', marginTop: -1},
   arrowShaftLarge: {width: 4, height: 8},
   arrowBoxXl: {width: 28, height: 28, marginTop: 0},
   arrowHeadXl: {borderLeftWidth: 11, borderRightWidth: 11, borderBottomWidth: 13},
   arrowShaftXl: {width: 7, height: 13, borderRadius: 2},
   arriveXl: {width: 18, height: 18, borderRadius: 9, marginTop: 0},
-  arrive: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#149C96', marginTop: 6},
+  arrive: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#6B4EE0', marginTop: 6},
   arriveLarge: {width: 14, height: 14, borderRadius: 7, marginTop: 6},
 });
 

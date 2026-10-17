@@ -19,8 +19,10 @@ import type {Place, RoutePlan, TrustLevel} from '../models/domain';
 import NativeTripSession from '../native/NativeTripSession';
 import {confirmTrip, startTripTo} from '../services/navigation/startTrip';
 import {saveSettings, selectPersisted} from '../services/settings/SettingsRepository';
-import {lineOffsetM, nextCues, progressAlong} from '../services/navigation/maneuver';
+import {lineOffsetM, nextCues, progressAlong, type ManeuverCue} from '../services/navigation/maneuver';
 import {streetFromInstruction} from '../services/navigation/instruction';
+import {jamNotice} from '../services/navigation/jamNotice';
+import {JamPill} from '../components/JamPill';
 import {speakManeuver, stopManeuverSpeech} from '../services/navigation/speakCue';
 import {speedLimitKmh} from '../services/navigation/speedLimit';
 import {isNightAt} from '../services/maps/sun';
@@ -436,6 +438,8 @@ export function MapScreen({navigation}: Props) {
   const routeOffsetM = route && located ? lineOffsetM(route.coordinates, shownLat, shownLon) : null;
   const rawFarFromRoads = offGraph && (routeOffsetM == null || routeOffsetM > 80);
   const farFromRoads = useStableOn(rawFarFromRoads, 2500);
+  const jam = driving && located ? jamNotice(snapshot) : null;
+  const jamShown = useStableOn(jam != null, 3000);
   const eta = farFromRoads ? offRoadEta(crossTrackM, snapshot?.speedMps ?? 0, snapshot?.hasSpeed === true) : null;
   const limitKmh = driving && located ? speedLimitKmh(shownLat, shownLon, route) : null;
   const cameraM = driving && located ? cameraAheadMeters(shownLat, shownLon, shownHeading) : null;
@@ -666,6 +670,9 @@ export function MapScreen({navigation}: Props) {
           <Text style={styles.pickHintText}>{copy.tapMap}</Text>
         </View>
       ) : null}
+      {jam && jamShown ? (
+        <JamPill notice={jam} language={resolveLanguage(language)} top={jamPillTop(cue, pair?.after ?? null)} />
+      ) : null}
       {route && driving ? (
         <TripPanel
           mode="drive"
@@ -848,6 +855,16 @@ function chooseRoute(next: RoutePlan, keepFollow: boolean): void {
 
 function samePlan(left: RoutePlan, right: RoutePlan): boolean {
   return left.distanceM === right.distanceM && left.coordinates.length === right.coordinates.length;
+}
+
+/** Just under the turn banner, whose height depends on lanes and the next-turn line. */
+function jamPillTop(cue: ManeuverCue | null, after: ManeuverCue | null): number {
+  if (!cue) {
+    return 54;
+  }
+  const lanes = cue.lanes.length > 1 ? 36 : 0;
+  const next = after && after.turn !== 'arrive' ? 40 : 0;
+  return 54 + 78 + lanes + next;
 }
 
 function useStableOn(active: boolean, holdMs: number): boolean {

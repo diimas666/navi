@@ -1,12 +1,13 @@
 import {useEffect, useState} from 'react';
-import {FlatList, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 
 import {PACK_MAX_ZOOM, REGIONS} from '../constants/map';
 import {resolveLanguage} from '../i18n/settingsCopy';
 import {toAppError} from '../services/errors/AppError';
 import {downloadRegion, removeRegion} from '../services/maps/OfflineMapService';
 import {loadManifest} from '../services/maps/mapFiles';
-import {regionIsStale} from '../services/maps/regionCoverage';
+import {bestRegionAt, orderRegions, regionIsStale} from '../services/maps/regionCoverage';
+import {useSessionStore} from '../store/sessionStore';
 import {uiCopy} from '../i18n/uiCopy';
 import {useMapStore} from '../store/mapStore';
 import {useSettingsStore} from '../store/settingsStore';
@@ -61,10 +62,15 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
   }, [online]);
   const pending = REGIONS.find(region => region.id === confirmId) ?? null;
   const wanted = new Set(need);
-  const rows = [...REGIONS].sort((left, right) => {
-    const leftNeed = wanted.has(left.id) ? 0 : 1;
-    const rightNeed = wanted.has(right.id) ? 0 : 1;
-    return leftNeed - rightNeed;
+  const [filter, setFilter] = useState('');
+  const hereLat = useSessionStore(state => state.displayLatitude);
+  const hereLon = useSessionStore(state => state.displayLongitude);
+  const here = hereLat != null && hereLon != null ? bestRegionAt(hereLat, hereLon)?.id ?? null : null;
+  const rows = orderRegions(REGIONS, {
+    need: wanted,
+    here,
+    downloaded: new Set(Object.values(regions).filter(region => region.status !== 'idle').map(region => region.id)),
+    filter,
   });
   const anyDownloading = Object.values(regions).some(region => region.status === 'downloading');
 
@@ -73,7 +79,17 @@ export function RegionDownloadList({need = []}: {need?: string[]}) {
     {anyDownloading ? (
       <Text style={[type.caption, {color: colors.textSecondary, paddingBottom: 8}]}>{copy.mapsBackground}</Text>
     ) : null}
+    <TextInput
+      value={filter}
+      onChangeText={setFilter}
+      placeholder={copy.mapsFind}
+      placeholderTextColor={colors.textMuted}
+      autoCorrect={false}
+      clearButtonMode="while-editing"
+      style={[styles.find, {backgroundColor: colors.surface, color: colors.textPrimary}]}
+    />
     <FlatList
+      keyboardShouldPersistTaps="handled"
       data={rows}
       keyExtractor={item => item.id}
       style={styles.list}
@@ -203,6 +219,7 @@ function DownloadGlyph({color}: {color: string}) {
 
 const styles = StyleSheet.create({
   list: {flex: 1},
+  find: {height: 44, borderRadius: radius.md, paddingHorizontal: 14, fontSize: 16, marginBottom: 10},
   content: {gap: 10, paddingBottom: 12},
   card: {
     borderRadius: radius.md,

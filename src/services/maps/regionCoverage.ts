@@ -41,6 +41,58 @@ export function regionsAt(latitude: number, longitude: number): RegionDefinition
   });
 }
 
+/**
+ * Region list order: needed for the route, the region the phone is in, downloaded ones, then the
+ * rest by name. The filter matches any part of the name, Russian spellings included.
+ */
+export function orderRegions(
+  regions: RegionDefinition[],
+  options: {need: Set<string>; here: string | null; downloaded: Set<string>; filter: string},
+): RegionDefinition[] {
+  const needle = foldName(options.filter);
+  const rank = (region: RegionDefinition) =>
+    options.need.has(region.id) ? 0 : region.id === options.here ? 1 : options.downloaded.has(region.id) ? 2 : 3;
+  const hit = (region: RegionDefinition) =>
+    [region.name, ...(RUSSIAN_NAMES[region.id.replace(/-oblast$/, '')] ?? [])].some(name =>
+      foldName(name).includes(needle),
+    );
+  return regions
+    .filter(region => needle.length === 0 || hit(region))
+    .sort((left, right) => rank(left) - rank(right) || left.name.localeCompare(right.name, 'uk'));
+}
+
+/** Russian names that folding alone cannot reach. */
+const RUSSIAN_NAMES: Record<string, string[]> = {
+  kyiv: ['Киев', 'Киевская'],
+  kharkiv: ['Харьков', 'Харьковская'],
+  lviv: ['Львов', 'Львовская'],
+  dnipro: ['Днепр', 'Днепропетровская'],
+  zaporizhzhia: ['Запорожье', 'Запорожская'],
+  mykolaiv: ['Николаев', 'Николаевская'],
+  ivano: ['Ивано-Франковск', 'Ивано-Франковская'],
+  chernihiv: ['Чернигов', 'Черниговская'],
+  kropyvnytskyi: ['Кропивницкий', 'Кировоград', 'Кировоградская'],
+  rivne: ['Ровно', 'Ровенская'],
+  zhytomyr: ['Житомир'],
+  khmelnytskyi: ['Хмельницкий'],
+  luhansk: ['Луганск', 'Луганская'],
+  zakarpattia: ['Закарпатье', 'Закарпатская'],
+};
+
+/** Folds Russian letters and apostrophes so "одесс", "киев" or "Івано" all find their region. */
+function foldName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/['’ʼ`]/g, '')
+    .replace(/ы/g, 'и')
+    .replace(/э/g, 'е')
+    .replace(/[ёе]/g, 'е')
+    .replace(/[иіїй]/g, 'и')
+    .replace(/[ъь]/g, '')
+    .replace(/(.)\1/g, '$1')
+    .trim();
+}
+
 export function bestRegionAt(latitude: number, longitude: number): RegionDefinition | null {
   return regionsAt(latitude, longitude)[0] ?? null;
 }

@@ -1,4 +1,4 @@
-import {memo} from 'react';
+import {memo, useEffect, useRef, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import Svg, {Path} from 'react-native-svg';
 
@@ -49,16 +49,33 @@ export const MapControls = memo(function MapControls({
   const language = resolveLanguage(useSettingsStore(state => state.language));
   const copy = uiCopy(language);
   const voiceLabel = voice ? voiceCopy[language].off : voiceCopy[language].on;
+  const [more, setMore] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepMoreOpen = () => {
+    setMore(true);
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+    }
+    closeTimer.current = setTimeout(() => setMore(false), 6000);
+  };
+  useEffect(
+    () => () => {
+      if (closeTimer.current) {
+        clearTimeout(closeTimer.current);
+      }
+    },
+    [],
+  );
   if (road) {
+    const card = {backgroundColor: colors.surface, shadowColor: colors.textPrimary};
+    // While driving only the route and voice stay. Rarely used switches wait behind "more".
     return (
       <View style={styles.column}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={copy.follow}
-          onPress={onFollow}
-          style={[styles.roadButton, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
-          <LocateGlyph />
-        </Pressable>
+        {!follow ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.follow} onPress={onFollow} style={[styles.roadButton, card]}>
+            <LocateGlyph />
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={copy.overview}
@@ -66,33 +83,51 @@ export const MapControls = memo(function MapControls({
           style={[styles.roadOn, {backgroundColor: colors.accent, shadowColor: colors.accent}]}>
           <RouteGlyph />
         </Pressable>
-        <View style={[styles.compass, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.heading} onPress={onHeading} style={styles.compassHalf}>
-            <NavArrow color={headingUp ? colors.accent : colors.textMuted} />
-          </Pressable>
-          <View style={[styles.compassLine, {backgroundColor: colors.border}]} />
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.north} onPress={onNorth} style={styles.compassHalf}>
-            <NorthArrow color={headingUp ? colors.textMuted : colors.accent} />
-          </Pressable>
-        </View>
-        {driving && onAlong ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={copy.alongRoute}
-            onPress={onAlong}
-            style={[styles.dimension, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
-            <Text style={[styles.dimensionLabel, {color: colors.textPrimary}]}>{copy.alongGas}</Text>
-          </Pressable>
+        {more ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={headingUp ? copy.north : copy.heading}
+              onPress={() => {
+                (headingUp ? onNorth : onHeading)();
+                keepMoreOpen();
+              }}
+              style={[styles.roadButton, card]}>
+              {headingUp ? <NavArrow color={colors.accent} /> : <NorthArrow color={colors.accent} />}
+            </Pressable>
+            {driving && onAlong ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy.alongRoute}
+                onPress={() => {
+                  setMore(false);
+                  onAlong();
+                }}
+                style={[styles.dimension, card]}>
+                <Text style={[styles.dimensionLabel, {color: colors.textPrimary}]}>{copy.alongGas}</Text>
+              </Pressable>
+            ) : null}
+            {driving ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={buildings3d ? copy.housesFlat : copy.housesSolid}
+                onPress={() => {
+                  onBuildings?.();
+                  keepMoreOpen();
+                }}
+                style={[styles.dimension, card]}>
+                <Text style={[styles.dimensionLabel, {color: colors.textPrimary}]}>{buildings3d ? '3D' : '2D'}</Text>
+              </Pressable>
+            ) : null}
+          </>
         ) : null}
-        {driving ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={buildings3d ? copy.housesFlat : copy.housesSolid}
-            onPress={onBuildings}
-            style={[styles.dimension, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
-            <Text style={[styles.dimensionLabel, {color: colors.textPrimary}]}>{buildings3d ? '3D' : '2D'}</Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy.more}
+          onPress={() => (more ? setMore(false) : keepMoreOpen())}
+          style={[styles.roadButton, card]}>
+          <Text style={[styles.moreDots, {color: more ? colors.accent : colors.textPrimary}]}>{more ? '×' : '•••'}</Text>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={voiceLabel}
@@ -103,7 +138,7 @@ export const MapControls = memo(function MapControls({
               stopManeuverSpeech();
             }
           }}
-          style={[styles.speakerButton, {backgroundColor: colors.surface, shadowColor: colors.textPrimary}]}>
+          style={[styles.speakerButton, card]}>
           <SpeakerGlyph muted={!voice} color={colors.textPrimary} cutout={colors.surface} />
         </Pressable>
       </View>
@@ -198,10 +233,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#149C96',
+    backgroundColor: '#6B4EE0',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#149C96',
+    shadowColor: '#6B4EE0',
     shadowOpacity: 0.28,
     shadowRadius: 8,
     shadowOffset: {width: 0, height: 3},
@@ -218,7 +253,7 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 3},
   },
   compassHalf: {width: 52, height: 46, alignItems: 'center', justifyContent: 'center'},
-  compassLine: {width: 28, height: 1, backgroundColor: '#D5E4E2'},
+  compassLine: {width: 28, height: 1, backgroundColor: 'rgba(48,32,72,0.1)'},
   dimension: {
     minWidth: 52,
     height: 44,
@@ -233,6 +268,7 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 3},
   },
   dimensionLabel: {color: '#1C1430', fontSize: 16, fontWeight: '800', letterSpacing: 0.4},
+  moreDots: {fontSize: 18, fontWeight: '900', letterSpacing: 1},
   speakerButton: {
     width: 64,
     height: 64,
@@ -251,19 +287,19 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2.4,
-    borderColor: '#149C96',
+    borderColor: '#6B4EE0',
   },
   locateDot: {
     position: 'absolute',
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#149C96',
+    backgroundColor: '#6B4EE0',
   },
-  locateTick: {position: 'absolute', width: 2.4, height: 6, borderRadius: 1, backgroundColor: '#149C96'},
+  locateTick: {position: 'absolute', width: 2.4, height: 6, borderRadius: 1, backgroundColor: '#6B4EE0'},
   locateN: {top: 0},
   locateS: {bottom: 0},
-  locateTickH: {position: 'absolute', width: 6, height: 2.4, borderRadius: 1, backgroundColor: '#149C96'},
+  locateTickH: {position: 'absolute', width: 6, height: 2.4, borderRadius: 1, backgroundColor: '#6B4EE0'},
   locateW: {left: 0},
   locateE: {right: 0},
   route: {width: 26, height: 26},
@@ -313,7 +349,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#149C96',
+    backgroundColor: '#6B4EE0',
   },
   routePinTip: {
     marginTop: -2,
