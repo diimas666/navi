@@ -4,6 +4,7 @@ import NativeMapStore from '../../native/NativeMapStore';
 import type {BasemapMode} from './basemapStyle';
 import {hideBasemapDistricts} from './basemapStyle';
 import {buildLocalStyle, regionFileName} from './offlineStyle';
+import {regionDataName} from './regionData';
 
 /** Public release of this repo. Built by scripts/maps/build.py, uploaded by scripts/maps/publish.sh. */
 const RELEASE = 'https://github.com/diimas666/navi/releases/download/maps-v1';
@@ -13,7 +14,10 @@ export type MapManifest = {
   version: string;
   built: number;
   maxZoom: number;
-  regions: Record<string, {asset: string; bytes: number; sha256?: string}>;
+  regions: Record<
+    string,
+    {asset: string; bytes: number; sha256?: string; data?: {asset: string; bytes: number}}
+  >;
   assets: Array<{asset: string; path: string; bytes: number}>;
 };
 
@@ -128,6 +132,50 @@ export async function downloadRegionFile(
   } finally {
     clearInterval(timer);
   }
+}
+
+/** Downloads the region database (addresses and roads), reporting 0..1. */
+export async function downloadRegionData(
+  manifest: MapManifest,
+  regionId: string,
+  onProgress: (fraction: number) => void,
+): Promise<void> {
+  const store = NativeMapStore;
+  const data = manifest.regions[regionId]?.data;
+  if (!store || !data) {
+    throw new Error('region data unavailable');
+  }
+  const name = regionDataName(regionId);
+  if ((await store.fileBytes(name)) === data.bytes) {
+    onProgress(1);
+    return;
+  }
+  const timer = setInterval(() => {
+    const fraction = store.downloadProgress(name);
+    if (fraction >= 0) {
+      onProgress(fraction);
+    }
+  }, 500);
+  try {
+    const bytes = await store.download(`${RELEASE}/${data.asset}`, name);
+    if (bytes !== data.bytes) {
+      await store.remove(name);
+      throw new Error('region data size mismatch');
+    }
+    onProgress(1);
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+export async function regionDataBytes(regionId: string): Promise<number> {
+  return (await NativeMapStore?.fileBytes(regionDataName(regionId))) ?? -1;
+}
+
+export async function removeRegionData(regionId: string): Promise<void> {
+  const name = regionDataName(regionId);
+  NativeMapStore?.cancelDownload(name);
+  await NativeMapStore?.remove(name);
 }
 
 export async function regionFileBytes(regionId: string): Promise<number> {

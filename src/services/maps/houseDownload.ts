@@ -80,9 +80,11 @@ export async function loadAllHouses(): Promise<void> {
 
 export async function forgetRegionHouses(regionId: string): Promise<void> {
   const manifest = await readManifest();
-  const tiles = manifest[regionId]?.tiles ?? [];
-  if (tiles.length > 0) {
-    await Promise.all(tiles.map(id => AsyncStorage.removeItem(tileKey(regionId, id))));
+  // Tiles from an interrupted download may be missing from the manifest, so match by key prefix.
+  const prefix = tileKey(regionId, '');
+  const keys = (await AsyncStorage.getAllKeys()).filter(key => key.startsWith(prefix));
+  if (keys.length > 0) {
+    await AsyncStorage.removeMany(keys);
   }
   delete manifest[regionId];
   await AsyncStorage.setItem(MANIFEST_KEY, JSON.stringify(manifest));

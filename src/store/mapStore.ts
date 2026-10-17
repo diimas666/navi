@@ -11,6 +11,8 @@ export type RegionDownload = {
   packZoom?: number;
   /** Release version of the downloaded region file, when the map comes from a .pmtiles file. */
   fileVersion?: string;
+  /** Release version of the region database with every address and the road graph. */
+  dataVersion?: string;
 };
 
 type MapState = {

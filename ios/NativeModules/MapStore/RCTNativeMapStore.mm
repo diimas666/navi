@@ -65,4 +65,19 @@
   [MapDownloads.shared cancel:name];
 }
 
+- (void)query:(NSString *)name
+          sql:(NSString *)sql
+       params:(NSString *)params
+      resolve:(RCTPromiseResolveBlock)resolve
+       reject:(RCTPromiseRejectBlock)reject {
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSString *rows = [MapDatabase.shared query:name sql:sql params:params];
+    resolve(rows == nil ? [NSNull null] : rows);
+  });
+}
+
+- (void)closeDatabase:(NSString *)name {
+  [MapDatabase.shared close:name];
+}
+
 @end

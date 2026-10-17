@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -72,6 +73,7 @@ def main():
     parser.add_argument('--memory', default='12g')
     parser.add_argument('--fresh-osm', action='store_true', help='download a new Ukraine extract')
     parser.add_argument('--only', nargs='*', help='region ids to extract')
+    parser.add_argument('--data', type=Path, help='folder with <region>.db from region_data.py')
     args = parser.parse_args()
     work, out = args.work.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -94,7 +96,13 @@ def main():
             continue
         target = out / f'{region_id}.pmtiles'
         run([args.pmtiles, 'extract', country, target, f'--bbox={west},{south},{east},{north}', '--maxzoom=14'])
-        manifest['regions'][region_id] = {'asset': target.name, 'bytes': target.stat().st_size, 'sha256': sha256(target)}
+        entry = {'asset': target.name, 'bytes': target.stat().st_size, 'sha256': sha256(target)}
+        database = args.data / f'{region_id}.db' if args.data else None
+        if database and database.exists():
+            copy = out / database.name
+            shutil.copyfile(database, copy)
+            entry['data'] = {'asset': copy.name, 'bytes': copy.stat().st_size}
+        manifest['regions'][region_id] = entry
 
     for slug, font in FONTS.items():
         for glyphs in RANGES:

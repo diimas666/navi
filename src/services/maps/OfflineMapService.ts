@@ -22,7 +22,17 @@ import {
 import {downloadRegionHouses, forgetRegionHouses, housesAreComplete, reopenHouseDownload} from './houseDownload';
 import {fetchRegionRoads, reopenStreetDownload, saveRegionRoads, streetsAreComplete} from '../roads/RegionRoads';
 import {routingGraph} from '../roads/RegionGraph';
-import {downloadRegionFile, ensureSharedFiles, loadManifest, regionFileBytes, removeRegionFile} from './mapFiles';
+import {
+  downloadRegionData,
+  downloadRegionFile,
+  ensureSharedFiles,
+  loadManifest,
+  regionDataBytes,
+  regionFileBytes,
+  removeRegionData,
+  removeRegionFile,
+} from './mapFiles';
+import {forgetRegionData} from './regionData';
 
 const KEY = 'neiv.regions.v1';
 const runningDownloads = new Set<string>();
@@ -112,44 +122,68 @@ export async function downloadRegion(region: RegionDefinition, options?: {refres
       packId = await ensureTilePack(region, existing, options?.refresh === true);
     }
     throwIfPaused(stamp);
-    try {
-      await fetchRegionRoads(region, (done, total) => {
-        const copy = uiCopy(useSettingsStore.getState().language);
-        const fraction = total === 0 ? 1 : done / total;
-        useMapStore.getState().patchRegion(region.id, {
-          progress: 0.68 + fraction * 0.16,
-          detail: `${copy.streetTiles} ${done}/${total}`,
+    const data = manifest?.regions[region.id]?.data;
+    let clipped = true;
+    if (manifest && data) {
+      const current =
+        !options?.refresh &&
+        existing?.dataVersion != null &&
+        (await regionDataBytes(region.id)) === data.bytes;
+      if (!current) {
+        await downloadRegionData(manifest, region.id, fraction => {
+          noteDownloadPulse();
+          const copy = uiCopy(useSettingsStore.getState().language);
+          useMapStore.getState().patchRegion(region.id, {
+            progress: Math.max(0.68, Math.min(0.99, 0.68 + fraction * 0.31)),
+            detail: `${copy.houseTiles} ${Math.round(fraction * 100)}%`,
+          });
         });
-      });
-    } catch (error) {
-      if (isDownloadPaused(error)) {
-        throw error;
       }
-      // Saved street tiles stay. The next download continues them.
-    }
-    throwIfPaused(stamp);
-    try {
-      await downloadRegionHouses(region, fraction => {
-        const copy = uiCopy(useSettingsStore.getState().language);
-        useMapStore.getState().patchRegion(region.id, {
-          progress: Math.max(0.84, Math.min(0.99, 0.84 + fraction * 0.15)),
-          detail: `${copy.houseTiles} ${Math.round(fraction * 100)}%`,
+      forgetRegionData(region.id);
+      useMapStore.getState().patchRegion(region.id, {dataVersion: current ? existing?.dataVersion : manifest.version});
+      // The database holds every street and house, so the Overpass tiles of this region go.
+      await saveRegionRoads(region.id, null);
+      await forgetRegionHouses(region.id);
+    } else {
+      try {
+        await fetchRegionRoads(region, (done, total) => {
+          const copy = uiCopy(useSettingsStore.getState().language);
+          const fraction = total === 0 ? 1 : done / total;
+          useMapStore.getState().patchRegion(region.id, {
+            progress: 0.68 + fraction * 0.16,
+            detail: `${copy.streetTiles} ${done}/${total}`,
+          });
         });
-      });
-    } catch (error) {
-      const appError = new AppError('OFFLINE_MAP_ERROR', 'house download incomplete', tripText().housesMissing);
-      logDeveloperError(toAppError(error, 'OFFLINE_MAP_ERROR'));
-      useMapStore.getState().patchRegion(region.id, {status: 'error', packId, error: appError.userMessage});
-      await persistRegionState();
-      throw appError;
+      } catch (error) {
+        if (isDownloadPaused(error)) {
+          throw error;
+        }
+        // Saved street tiles stay. The next download continues them.
+      }
+      throwIfPaused(stamp);
+      try {
+        await downloadRegionHouses(region, fraction => {
+          const copy = uiCopy(useSettingsStore.getState().language);
+          useMapStore.getState().patchRegion(region.id, {
+            progress: Math.max(0.84, Math.min(0.99, 0.84 + fraction * 0.15)),
+            detail: `${copy.houseTiles} ${Math.round(fraction * 100)}%`,
+          });
+        });
+      } catch (error) {
+        const appError = new AppError('OFFLINE_MAP_ERROR', 'house download incomplete', tripText().housesMissing);
+        logDeveloperError(toAppError(error, 'OFFLINE_MAP_ERROR'));
+        useMapStore.getState().patchRegion(region.id, {status: 'error', packId, error: appError.userMessage});
+        await persistRegionState();
+        throw appError;
+      }
+      throwIfPaused(stamp);
+      clipped = routingGraph().edges.some(edge =>
+        edge.coordinates.some(
+          ([lon, lat]) =>
+            lon >= region.west && lon <= region.east && lat >= region.south && lat <= region.north,
+        ),
+      );
     }
-    throwIfPaused(stamp);
-    const clipped = routingGraph().edges.some(edge =>
-      edge.coordinates.some(
-        ([lon, lat]) =>
-          lon >= region.west && lon <= region.east && lat >= region.south && lat <= region.north,
-      ),
-    );
     useMapStore.getState().patchRegion(region.id, {
       status: 'downloaded',
       progress: 1,
@@ -230,12 +264,15 @@ export async function removeRegion(regionId: string): Promise<void> {
     }
   }
   await removeRegionFile(regionId).catch(() => undefined);
+  forgetRegionData(regionId);
+  await removeRegionData(regionId).catch(() => undefined);
   useMapStore.getState().patchRegion(regionId, {
     status: 'idle',
     progress: 0,
     packId: null,
     packZoom: undefined,
     fileVersion: undefined,
+    dataVersion: undefined,
     error: null,
     detail: null,
     updatedAt: null,
@@ -255,6 +292,9 @@ export async function completeMissingHouses(): Promise<void> {
     const stalled = state?.status === 'downloading';
     const saved = state?.status === 'downloaded';
     if (!stalled && !saved) {
+      continue;
+    }
+    if (saved && state.dataVersion != null) {
       continue;
     }
     if (saved) {
@@ -303,7 +343,10 @@ export async function refreshStaleRegions(): Promise<void> {
     const onFile = state.fileVersion != null;
     const fileOffered = manifest?.regions[region.id] != null;
     // A region still on a tile pack moves to the region file, or at least to a z14 pack.
-    const upgrade = !onFile && (fileOffered || state.packZoom !== PACK_MAX_ZOOM);
+    const dataOffered = manifest?.regions[region.id]?.data != null;
+    // A newer region database is small next to the map, so it comes without waiting for staleness.
+    const newerData = dataOffered && state.dataVersion !== manifest?.version;
+    const upgrade = (!onFile && (fileOffered || state.packZoom !== PACK_MAX_ZOOM)) || newerData;
     const stale = regionIsStale(state.updatedAt, now) && (!onFile || manifest?.version !== state.fileVersion);
     if (!upgrade && !stale) {
       continue;

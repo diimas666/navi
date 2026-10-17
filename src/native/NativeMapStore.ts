@@ -13,6 +13,9 @@ export interface Spec extends TurboModule {
   /** 0..1 while running, -1 when nothing runs under this name. */
   downloadProgress(name: string): number;
   cancelDownload(name: string): void;
+  /** Read-only SQL on a region database. JSON array of row arrays, null when the file is missing. */
+  query(name: string, sql: string, params: string): Promise<string | null>;
+  closeDatabase(name: string): void;
 }
 
 export default TurboModuleRegistry.get<Spec>('NativeMapStore');

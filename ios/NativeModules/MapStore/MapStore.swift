@@ -35,6 +35,7 @@ import Foundation
 
   @objc public func remove(_ name: String) -> Bool {
     guard let url = fileURL(name) else { return false }
+    MapDatabase.shared.close(name)
     do {
       try FileManager.default.removeItem(at: url)
       return true

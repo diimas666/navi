@@ -26,12 +26,47 @@ const HOUSE_CELL = 0.02;
 
 let houses: HousePoint[] = [];
 let houseKeys = new Set<string>();
+/** Region databases: houses around the car, and every house of streets a search named. */
+let areaHouses: HousePoint[] = [];
+let primedHouses: HousePoint[] = [];
+const PRIMED_CAP = 30_000;
+let combined: HousePoint[] | null = null;
 let byStreet: Map<string, HousePoint[]> | null = null;
 let houseCells: Map<string, HousePoint[]> | null = null;
+
+function invalidate(): void {
+  combined = null;
+  byStreet = null;
+  houseCells = null;
+}
+
+export function setAreaHouses(next: HousePoint[]): void {
+  areaHouses = next;
+  invalidate();
+}
+
+export function addPrimedHouses(next: HousePoint[]): void {
+  if (next.length === 0) {
+    return;
+  }
+  primedHouses = dedupeHouses([...next, ...primedHouses]).slice(0, PRIMED_CAP);
+  invalidate();
+}
+
+function allHouses(): HousePoint[] {
+  if (!combined) {
+    combined =
+      areaHouses.length === 0 && primedHouses.length === 0
+        ? houses
+        : dedupeHouses([...houses, ...areaHouses, ...primedHouses]);
+  }
+  return combined;
+}
 
 export function replaceHouses(next: HousePoint[]): void {
   houses = [];
   houseKeys = new Set();
+  invalidate();
   addHouses(next);
 }
 
@@ -50,8 +85,7 @@ export function addHouses(next: HousePoint[]): void {
     houseKeys.add(key);
     houses.push(point);
   }
-  byStreet = null;
-  houseCells = null;
+  invalidate();
 }
 
 function houseKey(point: HousePoint): string {
@@ -86,7 +120,7 @@ function houseIndex(): Map<string, HousePoint[]> {
     return houseCells;
   }
   const cells = new Map<string, HousePoint[]>();
-  for (const house of houses) {
+  for (const house of allHouses()) {
     const key = `${Math.floor(house.latitude / HOUSE_CELL)}:${Math.floor(house.longitude / HOUSE_CELL)}`;
     const bucket = cells.get(key);
     if (bucket) {
@@ -430,7 +464,7 @@ function streetIndex(): Map<string, HousePoint[]> {
     return byStreet;
   }
   const index = new Map<string, HousePoint[]>();
-  houses.forEach(house => {
+  allHouses().forEach(house => {
     const key = house.street;
     const group = index.get(key);
     if (group) {

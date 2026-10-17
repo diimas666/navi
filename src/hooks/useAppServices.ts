@@ -18,7 +18,8 @@ import {decidePark, type ParkMemory} from '../services/navigation/parkHold';
 import {distanceToRoute} from '../services/navigation/offRoute';
 import {geometryStartsNear, placeFix} from '../services/navigation/placeFix';
 import {loadLastPlace, rememberPlace} from '../services/navigation/lastPlace';
-import {centerMovedFar, setLoadCenter} from '../services/maps/nearFirst';
+import {centerMovedFar, loadCenter, setLoadCenter} from '../services/maps/nearFirst';
+import {areaMovedFar, loadArea} from '../services/maps/regionData';
 import {startRouteDr, stepRouteDr, type RouteDrState} from '../services/navigation/routeDr';
 import {progressAlong} from '../services/navigation/maneuver';
 import {planTrip, rebuildIfOffRoute} from '../services/navigation/startTrip';
@@ -267,6 +268,9 @@ export function useAppServices(): void {
             setLoadCenter({latitude: shown.latitude, longitude: shown.longitude});
             reloadOfflineData().catch(() => undefined);
           }
+          if (areaMovedFar(shown.latitude, shown.longitude)) {
+            loadArea(shown.latitude, shown.longitude).catch(() => undefined);
+          }
         }
         rememberPoint(snapshot, shown.latitude, shown.longitude);
         rememberCalibration(snapshot);
@@ -336,7 +340,12 @@ let offlineReload: Promise<void> | null = null;
 /** Loads saved streets and houses nearest the load center first. One reload runs at a time. */
 function reloadOfflineData(): Promise<void> {
   if (!offlineReload) {
-    offlineReload = Promise.all([loadRegionRoads().catch(() => undefined), loadAllHouses().catch(() => undefined)])
+    const center = loadCenter();
+    offlineReload = Promise.all([
+      loadRegionRoads().catch(() => undefined),
+      loadAllHouses().catch(() => undefined),
+      center ? loadArea(center.latitude, center.longitude).catch(() => undefined) : Promise.resolve(),
+    ])
       .then(() => undefined)
       .finally(() => {
         offlineReload = null;

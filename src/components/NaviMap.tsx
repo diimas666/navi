@@ -716,7 +716,8 @@ export const NaviMap = memo(function NaviMap({
             />
           </GeoJSONSource>
         ) : null}
-        {houseMarks.features.length > 0 ? (
+        {/* Region files carry house numbers at z14. Saved addresses only fill in on old tile packs. */}
+        {!localGlyphs && houseMarks.features.length > 0 ? (
           <GeoJSONSource id="house-numbers" data={houseMarks}>
             <Layer
               id="house-number-labels"

@@ -8,6 +8,7 @@ import {routingGraph} from '../roads/RegionGraph';
 import {AppError} from '../errors/AppError';
 import {searchDownloadedHouses, searchDownloadedStreets, snapPlaceToHouse} from './houses';
 import {placeFix} from '../navigation/placeFix';
+import {primeSearch} from './regionData';
 import {googleSearchReady, googleSuggest} from './googlePlaces';
 import {matchesStreet, normalizeAddress, parseAddress, queryVariants, sameHouse, streetKey, wantedHouse} from './addressQuery';
 
@@ -192,6 +193,7 @@ export function googleSearchOn(): boolean {
 }
 
 export async function suggestPlaces(query: string): Promise<Place[]> {
+  await primeSearch(query).catch(() => undefined);
   const local = searchPlaces(query);
   const bias = viewerBias();
   if (query.trim().length < 2) {

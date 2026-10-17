@@ -310,8 +310,10 @@ async function readTileNetworks(): Promise<RoadNetwork[]> {
 
 async function forgetStreetTiles(regionId: string): Promise<void> {
   const manifest = await readRoadManifest();
-  const tiles = manifest[regionId]?.tiles ?? [];
-  await Promise.all(tiles.map(id => AsyncStorage.removeItem(streetTileKey(regionId, id))));
+  // An interrupted download can leave tiles the manifest never listed, so match by key prefix.
+  const prefix = `${TILE_KEY}.${regionId}.`;
+  const keys = (await AsyncStorage.getAllKeys()).filter(key => key.startsWith(prefix));
+  await AsyncStorage.removeMany(keys);
   delete manifest[regionId];
   await AsyncStorage.setItem(TILE_KEY, JSON.stringify(manifest));
 }

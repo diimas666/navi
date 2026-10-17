@@ -5,6 +5,7 @@ import NativeTripSession from '../../native/NativeTripSession';
 import {useSessionStore} from '../../store/sessionStore';
 import {useUiStore} from '../../store/uiStore';
 import {planRoutes} from '../roads/Router';
+import {loadCorridor} from '../maps/regionData';
 import {routingGraph} from '../roads/RegionGraph';
 import {streetRoutes} from '../roads/StreetRouter';
 import {haversineMeters, projectOntoSegment} from '../../utils/geo';
@@ -139,6 +140,11 @@ async function collectRoutes(
   } catch {
     // Street routing needs a network response. The saved graph is the fallback.
   }
+  await loadCorridor([
+    {latitude: originLat, longitude: originLon},
+    ...stops.map(stop => ({latitude: stop.latitude, longitude: stop.longitude})),
+    {latitude: destinationLat, longitude: destinationLon},
+  ]).catch(() => undefined);
   const offline = planThroughStops(routingGraph(), originLat, originLon, destinationLat, destinationLon, stops)
     .map(route => finish(route, 'graph'))
     .filter(route => startsNear(route, originLat, originLon));

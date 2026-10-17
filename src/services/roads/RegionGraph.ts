@@ -32,6 +32,9 @@ const rank: Record<string, number> = {
 };
 
 let extras: RoadNetwork[] = [];
+/** Streets around the car and the current route corridor, read from region databases. */
+let area: RoadNetwork | null = null;
+let corridor: RoadNetwork | null = null;
 let cached: RoadGraph | null = null;
 
 export function setRegionNetworks(networks: RoadNetwork[]): void {
@@ -39,16 +42,43 @@ export function setRegionNetworks(networks: RoadNetwork[]): void {
   cached = null;
 }
 
+export function setAreaNetwork(network: RoadNetwork | null): void {
+  area = network;
+  cached = null;
+}
+
+export function setCorridorNetwork(network: RoadNetwork | null): void {
+  corridor = network;
+  cached = null;
+}
+
 export function routingGraph(): RoadGraph {
-  if (extras.length === 0) {
+  const parts = [...extras, ...(area ? [area] : []), ...(corridor ? [corridor] : [])];
+  if (parts.length === 0) {
     return bundledGraph;
   }
   if (!cached) {
     const bundled = network as RoadNetwork;
-    cached = new RoadGraph({
-      nodes: [...bundled.nodes, ...extras.flatMap(item => item.nodes)],
-      edges: [...bundled.edges, ...extras.flatMap(item => item.edges)],
-    });
+    const edgeIds = new Set<string>();
+    const nodeIds = new Set<string>();
+    const nodes: RoadNode[] = [];
+    const edges: RoadEdge[] = [];
+    // Region databases overlap (Kyiv city inside Kyiv oblast) and corridors repeat area edges.
+    for (const part of [bundled, ...parts]) {
+      part.nodes.forEach(node => {
+        if (!nodeIds.has(node.id)) {
+          nodeIds.add(node.id);
+          nodes.push(node);
+        }
+      });
+      part.edges.forEach(edge => {
+        if (!edgeIds.has(edge.id)) {
+          edgeIds.add(edge.id);
+          edges.push(edge);
+        }
+      });
+    }
+    cached = new RoadGraph({nodes, edges});
   }
   return cached;
 }

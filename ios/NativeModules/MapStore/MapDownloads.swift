@@ -119,6 +119,7 @@ import Foundation
       let staged = target.appendingPathExtension("part")
       try? FileManager.default.removeItem(at: staged)
       try FileManager.default.moveItem(at: location, to: staged)
+      MapDatabase.shared.close(name)
       if FileManager.default.fileExists(atPath: target.path) {
         _ = try FileManager.default.replaceItemAt(target, withItemAt: staged)
       } else {
