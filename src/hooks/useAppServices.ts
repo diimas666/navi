@@ -20,7 +20,7 @@ import {geometryStartsNear, placeFix} from '../services/navigation/placeFix';
 import {loadLastPlace, rememberPlace} from '../services/navigation/lastPlace';
 import {centerMovedFar, loadCenter, setLoadCenter} from '../services/maps/nearFirst';
 import {areaMovedFar, loadArea} from '../services/maps/regionData';
-import {startRouteDr, stepRouteDr, type RouteDrState} from '../services/navigation/routeDr';
+import {pullRouteDr, startRouteDr, stepRouteDr, type RouteDrState} from '../services/navigation/routeDr';
 import {progressAlong} from '../services/navigation/maneuver';
 import {planTrip, rebuildIfOffRoute} from '../services/navigation/startTrip';
 import {loadPlaces} from '../services/places/PlacesRepository';
@@ -311,11 +311,11 @@ export function useAppServices(): void {
   }, []);
 }
 
-let routeDr: {line: Array<[number, number]>; state: RouteDrState} | null = null;
+let routeDr: {line: Array<[number, number]>; state: RouteDrState; pulls: number} | null = null;
 
 /** While jammed on an active route, the estimate moves along the route line. Null once the car leaves it. */
 function followRouteDr(
-  snapshot: {navigationActive: boolean; accuracy: number},
+  snapshot: {navigationActive: boolean; accuracy: number; networkPulls?: number},
   latitude: number,
   longitude: number,
 ): {latitude: number; longitude: number} | null {
@@ -325,13 +325,17 @@ function followRouteDr(
     routeDr = null;
     return null;
   }
+  const pulls = snapshot.networkPulls ?? 0;
   if (!routeDr || routeDr.line !== line) {
     const fromLat = session.displayLatitude ?? latitude;
     const fromLon = session.displayLongitude ?? longitude;
-    routeDr = {line, state: startRouteDr(progressAlong(line, fromLat, fromLon), {latitude, longitude})};
+    routeDr = {line, state: startRouteDr(progressAlong(line, fromLat, fromLon), {latitude, longitude}), pulls};
+  } else if (routeDr.pulls !== pulls) {
+    const projected = progressAlong(line, latitude, longitude);
+    routeDr = {line, state: pullRouteDr(routeDr.state, projected, {latitude, longitude}, snapshot.accuracy), pulls};
   }
   const next = stepRouteDr(routeDr.state, line, {latitude, longitude}, snapshot.accuracy);
-  routeDr = {line, state: next.state};
+  routeDr = {line, state: next.state, pulls};
   return next.point;
 }
 

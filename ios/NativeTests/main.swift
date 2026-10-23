@@ -224,5 +224,56 @@ scenario("DR: без OBD і без інерціальної швидкості �
   check(distance(home.0, home.1, place.0, place.1) < 1, "без джерела швидкості DR не рухає точку")
 }
 
+func networkStep(_ base: NSDictionary, _ point: (Double, Double), accuracy: Double, at seconds: Double) -> NSDictionary {
+  let input = NSMutableDictionary(dictionary: base)
+  input["hasNetworkFix"] = true
+  input["networkLatitude"] = point.0
+  input["networkLongitude"] = point.1
+  input["networkAccuracy"] = accuracy
+  input["networkTimestamp"] = startMs + seconds * 1000
+  return input
+}
+
+scenario("DR без OBD: вежі й Wi-Fi не дають точці лишитись у дворі") {
+  _ = DeadReckoningEngine.shared.step(drStep(at: 0, trust: "trusted", gps: home, vehicleSpeed: 3))
+  // Five minutes of jamming without a speed source. The car is 4 km east.
+  for tick in 1...3000 {
+    _ = DeadReckoningEngine.shared.step(drStep(at: Double(tick) * 0.1, trust: "untrusted", gps: nil, vehicleSpeed: nil))
+  }
+  let car = offset(home.0, home.1, east: 4_000, north: 0)
+  let tower = offset(car.0, car.1, east: 250, north: -150)
+  let out = DeadReckoningEngine.shared.step(
+    networkStep(drStep(at: 300.1, trust: "untrusted", gps: nil, vehicleSpeed: nil), tower, accuracy: 600, at: 300)
+  )
+  let place = coords(out)
+  let error = distance(car.0, car.1, place.0, place.1)
+  check(error < 700, "оцінка підтягнулась до машини: похибка \(Int(error)) м")
+  check(NeivJSON.double(out, "accuracy") >= error, "невизначеність покриває похибку: ±\(Int(NeivJSON.double(out, "accuracy"))) при \(Int(error))")
+  check(NeivJSON.double(out, "networkPulls") == 1, "лічильник підтягувань виріс")
+  let again = DeadReckoningEngine.shared.step(
+    networkStep(drStep(at: 300.2, trust: "untrusted", gps: nil, vehicleSpeed: nil), tower, accuracy: 600, at: 300)
+  )
+  check(NeivJSON.double(again, "networkPulls") == 1, "той самий фікс не тягне вдруге")
+}
+
+scenario("DR: фікс веж, недосяжний від останнього GPS, — підміна") {
+  _ = DeadReckoningEngine.shared.step(drStep(at: 0, trust: "trusted", gps: home, vehicleSpeed: 15))
+  let far = offset(home.0, home.1, east: 0, north: 200_000)
+  let out = DeadReckoningEngine.shared.step(
+    networkStep(drStep(at: 60, trust: "untrusted", gps: nil, vehicleSpeed: nil), far, accuracy: 800, at: 60)
+  )
+  let place = coords(out)
+  check(distance(home.0, home.1, place.0, place.1) < 1_000, "точка не стрибає на 200 км")
+}
+
+scenario("DR: глушіння від запуску — перша точка з веж") {
+  let tower = offset(home.0, home.1, east: 100, north: 100)
+  let out = DeadReckoningEngine.shared.step(
+    networkStep(drStep(at: 0, trust: "untrusted", gps: nil, vehicleSpeed: nil), tower, accuracy: 900, at: 0)
+  )
+  check(NeivJSON.bool(out, "valid"), "оцінка з'явилась")
+  check(NeivJSON.double(out, "accuracy") >= 900, "з чесною похибкою ±\(Int(NeivJSON.double(out, "accuracy")))")
+}
+
 print("\n\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

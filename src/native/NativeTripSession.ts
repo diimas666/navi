@@ -22,6 +22,8 @@ export type NativeSnapshot = {
   distanceSinceGPS: number;
   timeSinceGPS: number;
   source: string;
+  /** Grows each time a Wi-Fi or cell fix moved the jammed estimate. */
+  networkPulls: number;
   hasSpeed: boolean;
   speedMps: number;
   speedSource: string;

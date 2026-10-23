@@ -19,6 +19,17 @@ import Foundation
   private var lastTimestamp = 0.0
   private var source = "none"
   private var outageBase = 8.0
+  /// Drift counts from the last GPS fix or network fix that bounded the estimate.
+  private var driftDistance = 0.0
+  private var driftTime = 0.0
+  /// Last trusted GPS fix. A network fix the car could not reach from here is ignored.
+  private var anchorLat = 0.0
+  private var anchorLon = 0.0
+  private var anchorTimestamp = 0.0
+  private var lastNetworkTimestamp = 0.0
+  private var networkPulls = 0
+  private let maxCarSpeed = 45.0
+  private let maxNetworkAccuracy = 3_000.0
   private let earthRadius = 6_378_137.0
 
   @objc public func hasValidPosition() -> Bool {
@@ -40,6 +51,11 @@ import Foundation
     lastTimestamp = 0
     source = "none"
     outageBase = 8
+    driftDistance = 0
+    driftTime = 0
+    anchorTimestamp = 0
+    lastNetworkTimestamp = 0
+    networkPulls = 0
     lock.unlock()
   }
 
@@ -65,12 +81,18 @@ import Foundation
     let motionAccuracy = NeivJSON.double(input, "headingAccuracy")
     let hasYaw = NeivJSON.bool(input, "hasYawRate")
     let yawRate = NeivJSON.double(input, "yawRate")
+    let hasNetwork = NeivJSON.bool(input, "hasNetworkFix")
+    let networkLat = NeivJSON.double(input, "networkLatitude")
+    let networkLon = NeivJSON.double(input, "networkLongitude")
+    let networkAccuracy = NeivJSON.double(input, "networkAccuracy")
+    let networkTimestamp = NeivJSON.double(input, "networkTimestamp")
 
     let rawDt = lastTimestamp > 0 ? (timestamp - lastTimestamp) / 1000 : 0
     let dt = min(max(rawDt, 0), 1)
     let paused = rawDt > 2.5
     if rawDt > 1 {
       timeSinceGPS += rawDt - dt
+      driftTime += rawDt - dt
     }
     lastTimestamp = timestamp
 
@@ -89,6 +111,24 @@ import Foundation
         dt: dt,
         paused: paused
       )
+      return snapshot()
+    }
+
+    let network = hasNetwork
+      ? acceptNetworkFix(lat: networkLat, lon: networkLon, accuracy: networkAccuracy, timestamp: networkTimestamp)
+      : nil
+    if !hasPosition, let network {
+      // Jammed since launch: a Wi-Fi or cell fix is better than no point at all.
+      latitude = network.lat
+      longitude = network.lon
+      accuracy = network.accuracy
+      outageBase = network.accuracy
+      driftDistance = 0
+      driftTime = 0
+      confidence = max(0.05, min(0.9, 30 / max(accuracy, 1)))
+      hasPosition = true
+      networkPulls += 1
+      source = allow ? "dr" : "held"
       return snapshot()
     }
 
@@ -116,6 +156,10 @@ import Foundation
     }
 
     timeSinceGPS += dt
+    driftTime += dt
+    if let network {
+      pullToward(network)
+    }
     if !allow {
       source = "held"
       confidence = max(0.05, min(confidence, 0.4))
@@ -138,9 +182,10 @@ import Foundation
       latitude = next.0
       longitude = next.1
       distanceSinceGPS += stepDistance
+      driftDistance += stepDistance
     }
-    let headingSlack = max(0, fused.accuracy) / 180 * distanceSinceGPS * 0.5
-    accuracy = outageBase + distanceSinceGPS * 0.03 + timeSinceGPS * 0.8 + headingSlack
+    let headingSlack = max(0, fused.accuracy) / 180 * driftDistance * 0.5
+    accuracy = outageBase + driftDistance * 0.03 + driftTime * 0.8 + headingSlack
     confidence = max(0.05, min(0.9, 30 / max(accuracy, 1)))
     source = "dr"
     return snapshot()
@@ -173,7 +218,10 @@ import Foundation
       source = "gps"
       timeSinceGPS = 0
       distanceSinceGPS = 0
+      driftDistance = 0
+      driftTime = 0
       outageBase = max(gpsAccuracy, 5)
+      setAnchor(lat, lon)
       return
     }
 
@@ -210,10 +258,61 @@ import Foundation
     if source == "gps" {
       timeSinceGPS = 0
       distanceSinceGPS = 0
+      driftDistance = 0
+      driftTime = 0
       outageBase = max(gpsAccuracy, 5)
     }
+    setAnchor(lat, lon)
     confidence = min(1, 28 / max(accuracy, 1))
     hasPosition = true
+  }
+
+  private func setAnchor(_ lat: Double, _ lon: Double) {
+    anchorLat = lat
+    anchorLon = lon
+    anchorTimestamp = lastTimestamp
+  }
+
+  /// Under jamming iOS still places the phone by Wi-Fi and cell towers, ±100…3000 m.
+  /// Too coarse to drive by, but it stops the estimate from staying in the yard
+  /// when there is no OBD speed. A fix the car could not have reached is spoofing.
+  private func acceptNetworkFix(
+    lat: Double,
+    lon: Double,
+    accuracy fixAccuracy: Double,
+    timestamp: Double
+  ) -> (lat: Double, lon: Double, accuracy: Double)? {
+    guard timestamp > lastNetworkTimestamp else { return nil }
+    lastNetworkTimestamp = timestamp
+    guard lat.isFinite, lon.isFinite, abs(lat) > 0.01 || abs(lon) > 0.01 else { return nil }
+    guard fixAccuracy > 0, fixAccuracy <= maxNetworkAccuracy else { return nil }
+    if anchorTimestamp > 0 {
+      let elapsed = max(0, (lastTimestamp - anchorTimestamp) / 1000)
+      let reach = 300 + fixAccuracy + maxCarSpeed * elapsed
+      if haversine(anchorLat, anchorLon, lat, lon) > reach {
+        return nil
+      }
+    }
+    return (lat, lon, fixAccuracy)
+  }
+
+  /// The car is inside the network circle. An estimate outside it moves to its inner half;
+  /// one inside it stays and only its uncertainty shrinks.
+  private func pullToward(_ network: (lat: Double, lon: Double, accuracy: Double)) {
+    let gap = haversine(latitude, longitude, network.lat, network.lon)
+    let keep = network.accuracy * 0.5
+    if gap > network.accuracy {
+      moveToward(network.lat, network.lon, gap - keep)
+      networkPulls += 1
+    }
+    let left = haversine(latitude, longitude, network.lat, network.lon)
+    let bounded = left + network.accuracy
+    if bounded < accuracy {
+      accuracy = bounded
+      outageBase = bounded
+      driftDistance = 0
+      driftTime = 0
+    }
   }
 
   private func moveToward(_ lat: Double, _ lon: Double, _ maxMeters: Double) {
@@ -249,6 +348,7 @@ import Foundation
       "distanceSinceGPS": distanceSinceGPS,
       "timeSinceGPS": timeSinceGPS,
       "source": source,
+      "networkPulls": networkPulls,
     ])
   }
 

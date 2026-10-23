@@ -191,6 +191,8 @@ import UIKit
       MotionManager.shared.adoptSpeed(effectiveGpsSpeed)
     }
     let integrate = jammed && drAllowed && (navigationActive || preview)
+    // Wi-Fi and cell fixes are too coarse to follow, but they keep the estimate in the right area.
+    let networkFix = !ignoreGps && reason == "poor_accuracy" ? fix : nil
     let input: NSDictionary = [
       "timestamp": Date().timeIntervalSince1970 * 1000,
       "trust": trust,
@@ -210,6 +212,11 @@ import UIKit
       "headingAccuracy": NeivJSON.double(motion ?? [:], "headingAccuracy"),
       "hasYawRate": NeivJSON.bool(motion ?? [:], "hasYawRate"),
       "yawRate": NeivJSON.double(motion ?? [:], "yawRate"),
+      "hasNetworkFix": networkFix != nil,
+      "networkLatitude": NeivJSON.double(networkFix ?? [:], "latitude"),
+      "networkLongitude": NeivJSON.double(networkFix ?? [:], "longitude"),
+      "networkAccuracy": NeivJSON.double(networkFix ?? [:], "horizontalAccuracy"),
+      "networkTimestamp": NeivJSON.double(networkFix ?? [:], "timestamp"),
     ]
     let output = step || navigationActive || preview
       ? DeadReckoningEngine.shared.step(input)
@@ -317,6 +324,7 @@ import UIKit
       "distanceSinceGPS": NeivJSON.double(output, "distanceSinceGPS"),
       "timeSinceGPS": NeivJSON.double(output, "timeSinceGPS"),
       "source": NeivJSON.string(output, "source"),
+      "networkPulls": NeivJSON.double(output, "networkPulls"),
       "hasSpeed": hasSpeed,
       "speedMps": speedMps,
       "speedSource": speedSource,

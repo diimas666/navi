@@ -21,6 +21,16 @@ export function startRouteDr(alongM: number, estimate: Point): RouteDrState {
   return {alongM, lastLatitude: estimate.latitude, lastLongitude: estimate.longitude, left: false};
 }
 
+/**
+ * A Wi-Fi or cell fix moved the free estimate. Its projection onto the route becomes the new
+ * progress. A step back smaller than the uncertainty is noise and keeps the old progress.
+ */
+export function pullRouteDr(state: RouteDrState, projectedM: number, estimate: Point, accuracyM: number): RouteDrState {
+  const back = state.alongM - projectedM;
+  const alongM = back > 0 && back < accuracyM ? state.alongM : projectedM;
+  return {alongM, lastLatitude: estimate.latitude, lastLongitude: estimate.longitude, left: false};
+}
+
 export function stepRouteDr(
   state: RouteDrState,
   coordinates: Array<[number, number]>,

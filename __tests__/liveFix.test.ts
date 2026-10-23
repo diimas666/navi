@@ -22,6 +22,7 @@ function snapshot(over: Partial<NativeSnapshot> = {}): NativeSnapshot {
     distanceSinceGPS: 0,
     timeSinceGPS: 0,
     source: 'gps',
+    networkPulls: 0,
     hasSpeed: true,
     speedMps: 12,
     speedSource: 'gps',

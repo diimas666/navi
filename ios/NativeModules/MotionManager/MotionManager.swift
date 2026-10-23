@@ -8,6 +8,10 @@ import Foundation
   @objc public static let shared = MotionManager()
 
   private let motion = CMMotionManager()
+  private let activity = CMMotionActivityManager()
+  /// iOS activity: the car is moving or standing. Without OBD it decides whether the speed holds.
+  private var driving = false
+  private var standing = false
   private let queue = OperationQueue()
   private let lock = NSLock()
   private var latestSample: NSDictionary?
@@ -31,6 +35,7 @@ import Foundation
 
   @objc public func start() -> Bool {
     guard motion.isDeviceMotionAvailable else { return false }
+    startActivity()
     if motion.isDeviceMotionActive { return true }
     motion.deviceMotionUpdateInterval = 0.1
     let frame: CMAttitudeReferenceFrame = motion.isDeviceMotionAvailable
@@ -45,6 +50,21 @@ import Foundation
 
   @objc public func stop() {
     motion.stopDeviceMotionUpdates()
+    activity.stopActivityUpdates()
+  }
+
+  private func startActivity() {
+    guard CMMotionActivityManager.isActivityAvailable() else { return }
+    let status = CMMotionActivityManager.authorizationStatus()
+    guard status != .denied, status != .restricted else { return }
+    activity.startActivityUpdates(to: queue) { [weak self] sample in
+      guard let self, let sample else { return }
+      let sure = sample.confidence != .low
+      self.lock.lock()
+      self.driving = sure && sample.automotive && !sample.stationary
+      self.standing = sure && sample.stationary
+      self.lock.unlock()
+    }
   }
 
   @objc public func latest() -> NSDictionary? {
@@ -140,9 +160,11 @@ import Foundation
       stillFor = 0
     }
     inertialSpeed = min(55, max(0, inertialSpeed + corrected * dt))
-    if stillFor > 2.5 {
+    if standing || stillFor > 2.5 {
       inertialSpeed *= exp(-dt / 1.2)
-    } else {
+    } else if !driving {
+      // Without OBD the accelerometer loses the speed within a minute or two.
+      // While iOS says the car is driving, the last known speed holds instead of fading to zero.
       inertialSpeed *= exp(-dt / 50)
     }
     inertialReady = true
