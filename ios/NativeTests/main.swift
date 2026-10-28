@@ -275,5 +275,23 @@ scenario("DR: глушіння від запуску — перша точка �
   check(NeivJSON.double(out, "accuracy") >= 900, "з чесною похибкою ±\(Int(NeivJSON.double(out, "accuracy")))")
 }
 
+scenario("DR: поворот на 90 градусів під час глушіння") {
+  _ = DeadReckoningEngine.shared.step(drStep(at: 0, trust: "trusted", gps: home, vehicleSpeed: 10, heading: 90))
+  // Car drives east at 10 m/s for 5 seconds under jamming
+  for tick in 1...50 {
+    _ = DeadReckoningEngine.shared.step(drStep(at: Double(tick) * 0.1, trust: "lost", gps: nil, vehicleSpeed: 10, heading: 90))
+  }
+  // Turn right toward south (yaw rate = +90 deg/s for 1 second = pi/2 rad/s)
+  var turnedOut: NSDictionary = [:]
+  for tick in 1...10 {
+    let stepInput = NSMutableDictionary(dictionary: drStep(at: 5.0 + Double(tick) * 0.1, trust: "lost", gps: nil, vehicleSpeed: 10, heading: 180))
+    stepInput["hasYawRate"] = true
+    stepInput["yawRate"] = Double.pi / 2.0
+    turnedOut = DeadReckoningEngine.shared.step(stepInput)
+  }
+  let finalHeading = NeivJSON.double(turnedOut, "heading")
+  check(abs(finalHeading - 180) < 15, "курс повернув на південь (180°): \(finalHeading)°")
+}
+
 print("\n\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

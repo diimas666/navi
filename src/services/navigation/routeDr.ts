@@ -44,15 +44,16 @@ export function stepRouteDr(
     lastLongitude: estimate.longitude,
     left: state.left,
   };
-  if (next.left || coordinates.length < 2) {
+  if (coordinates.length < 2) {
     return {state: next, point: null};
   }
   const point = pointAlong(coordinates, next.alongM);
   const gap = haversineMeters(point.latitude, point.longitude, estimate.latitude, estimate.longitude);
-  if (gap > Math.max(MIN_LEAVE_M, accuracyM * 1.5)) {
+  const tolerance = Math.max(MIN_LEAVE_M, accuracyM * 1.5);
+  if (gap > tolerance) {
     return {state: {...next, left: true}, point: null};
   }
-  return {state: next, point};
+  return {state: {...next, left: false}, point};
 }
 
 export function pointAlong(coordinates: Array<[number, number]>, alongM: number): Point {

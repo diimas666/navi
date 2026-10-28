@@ -106,10 +106,11 @@ import Foundation
     guard Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") != nil else {
       return
     }
-    let allowed = enabled && authorizationStatus() == "authorizedAlways"
+    let status = authorizationStatus()
+    let allowed = enabled && (status == "authorizedAlways" || status == "authorizedWhenInUse")
     manager.allowsBackgroundLocationUpdates = allowed
     manager.showsBackgroundLocationIndicator = allowed
-    manager.pausesLocationUpdatesAutomatically = !allowed
+    manager.pausesLocationUpdatesAutomatically = !enabled
     if allowed {
       manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
       manager.distanceFilter = kCLDistanceFilterNone
@@ -157,7 +158,9 @@ import Foundation
   private func publish(_ location: CLLocation) {
     let heading = manager.heading
     let trueHeading = heading?.trueHeading ?? -1
-    let hasHeading = trueHeading >= 0
+    let magneticHeading = heading?.magneticHeading ?? -1
+    let headingVal = trueHeading >= 0 ? trueHeading : (magneticHeading >= 0 ? magneticHeading : -1)
+    let hasHeading = headingVal >= 0
     let speed = location.speed
     let fix: NSDictionary = [
       "latitude": location.coordinate.latitude,
@@ -165,7 +168,7 @@ import Foundation
       "horizontalAccuracy": location.horizontalAccuracy,
       "altitude": location.altitude,
       "speed": speed >= 0 ? speed : 0,
-      "heading": hasHeading ? trueHeading : 0,
+      "heading": hasHeading ? headingVal : 0,
       "timestamp": location.timestamp.timeIntervalSince1970 * 1000,
       "hasSpeed": speed >= 0,
       "hasHeading": hasHeading,
@@ -178,8 +181,9 @@ import Foundation
   }
 
   public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-    guard newHeading.trueHeading >= 0, var current = latest() as? [String: Any] else { return }
-    current["heading"] = newHeading.trueHeading
+    let headingVal = newHeading.trueHeading >= 0 ? newHeading.trueHeading : (newHeading.magneticHeading >= 0 ? newHeading.magneticHeading : -1)
+    guard headingVal >= 0, var current = latest() as? [String: Any] else { return }
+    current["heading"] = headingVal
     current["hasHeading"] = true
     let fix = current as NSDictionary
     lock.lock()

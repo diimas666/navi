@@ -42,7 +42,7 @@ export function decidePark(input: ParkInput, memory: ParkMemory): ParkDecision {
   const sensorMove =
     input.hasSpeed &&
     input.speedMps >= CRAWL_MPS &&
-    (input.speedSource === 'obd' || input.speedSource === 'inertial');
+    (input.speedSource === 'obd' || input.speedSource === 'inertial' || input.speedSource === 'dr');
   const gpsMove =
     input.hasSpeed &&
     input.speedMps >= GPS_ROLL_MPS &&

@@ -207,7 +207,7 @@ import UIKit
       "gpsHeading": NeivJSON.double(fix ?? [:], "heading"),
       "hasVehicleSpeed": hasSensorSpeed,
       "vehicleSpeedMps": sensorSpeed,
-      "hasHeading": !jammed && NeivJSON.bool(motion ?? [:], "hasHeading"),
+      "hasHeading": NeivJSON.bool(motion ?? [:], "hasHeading"),
       "heading": NeivJSON.double(motion ?? [:], "heading"),
       "headingAccuracy": NeivJSON.double(motion ?? [:], "headingAccuracy"),
       "hasYawRate": NeivJSON.bool(motion ?? [:], "hasYawRate"),

@@ -75,6 +75,10 @@ import Speech
       finish(text: nil, error: "unavailable")
       return
     }
+    if tapInstalled {
+      input.removeTap(onBus: 0)
+      tapInstalled = false
+    }
     input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
       self?.request?.append(buffer)
     }

@@ -397,14 +397,17 @@ enum HeadingFusion {
     yawRate: Double,
     dt: Double
   ) -> (heading: Double, accuracy: Double) {
-    if hasAbsolute && accuracy >= 0 && accuracy < 55 {
-      let delta = atan2(sin((absolute - previous) * .pi / 180), cos((absolute - previous) * .pi / 180))
-      let next = previous + delta * 180 / .pi * min(1, max(dt, 0.05) / 0.5)
+    let dtSec = min(max(dt, 0.02), 0.5)
+    if hasAbsolute && accuracy >= 0 && accuracy < 65 {
+      let base = hasYaw ? previous + yawRate * dtSec * 180 / .pi : previous
+      let delta = atan2(sin((absolute - base) * .pi / 180), cos((absolute - base) * .pi / 180)) * 180 / .pi
+      let gain = min(1.0, dtSec / 0.5)
+      let next = base + delta * gain
       let wrapped = next.truncatingRemainder(dividingBy: 360)
       return (wrapped < 0 ? wrapped + 360 : wrapped, accuracy)
     }
     if hasYaw {
-      let next = previous + yawRate * dt * 180 / .pi
+      let next = previous + yawRate * dtSec * 180 / .pi
       let wrapped = next.truncatingRemainder(dividingBy: 360)
       return (wrapped < 0 ? wrapped + 360 : wrapped, min(180, 30 + abs(yawRate) * 8))
     }

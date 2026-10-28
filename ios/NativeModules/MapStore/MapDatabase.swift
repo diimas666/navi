@@ -46,7 +46,11 @@ import SQLite3
         case SQLITE_FLOAT:
           row.append(sqlite3_column_double(statement, column))
         case SQLITE_TEXT:
-          row.append(String(cString: sqlite3_column_text(statement, column)))
+          if let textPtr = sqlite3_column_text(statement, column) {
+            row.append(String(cString: textPtr))
+          } else {
+            row.append(NSNull())
+          }
         default:
           row.append(NSNull())
         }

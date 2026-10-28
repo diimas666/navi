@@ -259,7 +259,7 @@ export function useAppServices(): void {
                 gapS,
                 speedMps: snapshot.speedMps,
                 trustFix:
-                  useMapStore.getState().online && (snapshot.source === 'gps' || snapshot.source === 'blended'),
+                  snapshot.source === 'gps' || snapshot.source === 'blended',
               });
         session.setLiveFix(liveSnapshot, shown.latitude, shown.longitude, roadName, applied, crossTrackM);
         if (snapshot.hasGps) {

@@ -35,7 +35,7 @@ import {uncertaintyFeature} from './UncertaintyCircle';
 import {VehicleMarker} from './VehicleMarker';
 import type {RoutePlan} from '../models/domain';
 import {uiCopy} from '../i18n/uiCopy';
-import {driveBearing, driveFocal, drivePadding, glideDuration} from '../services/maps/cameraPull';
+import {driveBearing, driveFocal, drivePadding} from '../services/maps/cameraPull';
 import {MAP_FONT_BOLD, MAP_FONT_REGULAR} from '../services/maps/mapFonts';
 import {buildingLayerVisibility} from '../services/maps/mapLayers';
 import {distanceToRoute} from '../services/navigation/offRoute';
@@ -437,7 +437,7 @@ export const NaviMap = memo(function NaviMap({
           bearing,
           zoom,
           pitch,
-          duration: pitchChanged ? 480 : pinned ? glideDuration(elapsed) : tracking ? 280 : 160,
+          duration: pitchChanged ? 480 : pinned ? Math.max(70, Math.min(elapsed + 10, 130)) : tracking ? 280 : 160,
           easing: pinned ? 'linear' : 'ease',
           ...(pinned || pinChanged
             ? {padding: pinned ? drivePadding(frame) : {top: 0, right: 0, bottom: 0, left: 0}}

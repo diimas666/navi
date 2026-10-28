@@ -38,12 +38,17 @@ import Foundation
     startActivity()
     if motion.isDeviceMotionActive { return true }
     motion.deviceMotionUpdateInterval = 0.1
-    let frame: CMAttitudeReferenceFrame = motion.isDeviceMotionAvailable
-      ? .xArbitraryZVertical
-      : .xArbitraryZVertical
-    motion.startDeviceMotionUpdates(using: frame, to: queue) { [weak self] data, _ in
-      guard let self, let data else { return }
-      self.publish(data)
+    let availableFrames = CMMotionManager.availableAttitudeReferenceFrames()
+    if availableFrames.contains(.xArbitraryZVertical) {
+      motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] data, _ in
+        guard let self, let data else { return }
+        self.publish(data)
+      }
+    } else {
+      motion.startDeviceMotionUpdates(to: queue) { [weak self] data, _ in
+        guard let self, let data else { return }
+        self.publish(data)
+      }
     }
     return true
   }
@@ -79,6 +84,7 @@ import Foundation
     lock.lock()
     inertialSpeed = min(55, max(0, speed))
     inertialReady = true
+    stillFor = 0
     lock.unlock()
   }
 
@@ -151,21 +157,24 @@ import Foundation
     }
     let user = data.userAcceleration
     let forward = (user.x * fx + user.y * fy + user.z * fz) * 9.80665
-    accelBias += (forward - accelBias) * min(1, dt / 4)
+    accelBias += (forward - accelBias) * min(1, dt / 15.0)
     let corrected = forward - accelBias
-    let quiet = abs(user.x) + abs(user.y) + abs(user.z) < 0.04 && abs(yaw) < 0.05
+    let quiet = abs(user.x) + abs(user.y) + abs(user.z) < 0.05 && abs(yaw) < 0.05
     if quiet {
       stillFor += dt
     } else {
       stillFor = 0
     }
-    inertialSpeed = min(55, max(0, inertialSpeed + corrected * dt))
-    if standing || stillFor > 2.5 {
-      inertialSpeed *= exp(-dt / 1.2)
-    } else if !driving {
-      // Without OBD the accelerometer loses the speed within a minute or two.
-      // While iOS says the car is driving, the last known speed holds instead of fading to zero.
-      inertialSpeed *= exp(-dt / 50)
+    if abs(corrected) > 0.12 {
+      inertialSpeed = min(55, max(0, inertialSpeed + corrected * dt))
+    }
+    if standing {
+      inertialSpeed *= exp(-dt / 1.0)
+    } else if stillFor > 8.0 && inertialSpeed < 2.0 {
+      inertialSpeed *= exp(-dt / 1.5)
+    } else {
+      // Steady cruising holds speed; natural slow coasting drag
+      inertialSpeed *= exp(-dt / 60.0)
     }
     inertialReady = true
   }
